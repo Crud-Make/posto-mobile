@@ -1,6 +1,7 @@
 import { View, Text, TextInput, TouchableOpacity, ScrollView, Alert, ActivityIndicator, KeyboardAvoidingView, Platform } from 'react-native';
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
+import { submitMobileClosing, turnoService, type SubmitClosingData } from '../../lib/api';
 import {
     CreditCard,
     Receipt,
@@ -45,7 +46,8 @@ export default function RegistroScreen() {
     const [loading, setLoading] = useState(false);
     const [submitting, setSubmitting] = useState(false);
     const [userName, setUserName] = useState('Frentista');
-    const [turnoAtual, setTurnoAtual] = useState('Manhã');
+    const [turnoAtual, setTurnoAtual] = useState('Carregando...');
+    const [turnoId, setTurnoId] = useState<number | null>(null);
 
     const [registro, setRegistro] = useState<RegistroTurno>({
         valorCartao: '',
@@ -56,10 +58,54 @@ export default function RegistroScreen() {
         observacoes: '',
     });
 
-    // Calcular totais
+    // Formata um valor numérico para moeda BRL (ex: 1234.56 -> R$ 1.234,56)
+    const formatCurrency = (value: number): string => {
+        return value.toLocaleString('pt-BR', {
+            style: 'currency',
+            currency: 'BRL'
+        });
+    };
+
+    // Converte string BRL (R$ 1.234,56) para number (1234.56)
     const parseValue = (value: string): number => {
-        const parsed = parseFloat(value.replace(',', '.'));
+        if (!value) return 0;
+        // Remove tudo que não é dígito ou vírgula
+        // Remove R$, pontos e espaços
+        const cleanStr = value.replace(/[^\d,]/g, '').replace(',', '.');
+        const parsed = parseFloat(cleanStr);
         return isNaN(parsed) ? 0 : parsed;
+    };
+
+    // Formata o input enquanto digita (máscara de dinheiro)
+    // 1 -> 0,01
+    // 12 -> 0,12
+    // 123 -> 1,23
+    const formatCurrencyInput = (value: string) => {
+        // Remove tudo que não for dígito
+        const onlyNumbers = value.replace(/\D/g, '');
+
+        if (onlyNumbers === '') return '';
+
+        // Converte para centavos
+        const amount = parseInt(onlyNumbers) / 100;
+
+        // Formata para string BR
+        return amount.toLocaleString('pt-BR', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        });
+    };
+
+    const handleChange = (field: keyof RegistroTurno, value: string) => {
+        // Se o campo for observações, não aplica máscara
+        if (field === 'observacoes') {
+            setRegistro(prev => ({ ...prev, [field]: value }));
+            return;
+        }
+
+        // Para campos numéricos, aplica máscara de moeda
+        const formatted = formatCurrencyInput(value);
+        setRegistro(prev => ({ ...prev, [field]: formatted }));
     };
 
     const totalInformado =
@@ -87,30 +133,32 @@ export default function RegistroScreen() {
         fetchUser();
     }, []);
 
-    // Determinar turno atual baseado na hora
+    // Determinar turno atual usando o service
     useEffect(() => {
-        const hour = new Date().getHours();
-        if (hour >= 6 && hour < 14) {
-            setTurnoAtual('Manhã');
-        } else if (hour >= 14 && hour < 22) {
-            setTurnoAtual('Tarde');
-        } else {
-            setTurnoAtual('Noite');
+        async function loadTurno() {
+            try {
+                const turno = await turnoService.getCurrentTurno();
+                if (turno) {
+                    setTurnoAtual(turno.nome);
+                    setTurnoId(turno.id);
+                } else {
+                    // Fallback para detecção por hora
+                    const hour = new Date().getHours();
+                    if (hour >= 6 && hour < 14) {
+                        setTurnoAtual('Manhã');
+                    } else if (hour >= 14 && hour < 22) {
+                        setTurnoAtual('Tarde');
+                    } else {
+                        setTurnoAtual('Noite');
+                    }
+                }
+            } catch (error) {
+                console.error('Error loading turno:', error);
+                setTurnoAtual('Turno Atual');
+            }
         }
+        loadTurno();
     }, []);
-
-    const handleChange = (field: keyof RegistroTurno, value: string) => {
-        // Permite apenas números, vírgula e ponto
-        const cleanValue = value.replace(/[^0-9.,]/g, '');
-        setRegistro(prev => ({ ...prev, [field]: cleanValue }));
-    };
-
-    const formatCurrency = (value: number): string => {
-        return value.toLocaleString('pt-BR', {
-            style: 'currency',
-            currency: 'BRL'
-        });
-    };
 
     const handleSubmit = async () => {
         if (totalInformado === 0) {
@@ -120,6 +168,11 @@ export default function RegistroScreen() {
 
         if (temFalta && !registro.observacoes.trim()) {
             Alert.alert('Atenção', 'Quando há falta de caixa, é obrigatório informar uma observação');
+            return;
+        }
+
+        if (!turnoId) {
+            Alert.alert('Erro', 'Não foi possível identificar o turno. Tente novamente mais tarde.');
             return;
         }
 
@@ -133,32 +186,49 @@ export default function RegistroScreen() {
                     onPress: async () => {
                         setSubmitting(true);
                         try {
-                            const { data: { user } } = await supabase.auth.getUser();
+                            // Preparar dados para envio
+                            const closingData: SubmitClosingData = {
+                                data: new Date().toISOString().split('T')[0],
+                                turno_id: turnoId!,
+                                valor_cartao: parseValue(registro.valorCartao),
+                                valor_nota: parseValue(registro.valorNota),
+                                valor_pix: parseValue(registro.valorPix),
+                                valor_dinheiro: parseValue(registro.valorDinheiro),
+                                falta_caixa: faltaCaixaValue,
+                                observacoes: registro.observacoes,
+                            };
 
-                            // Aqui você integraria com o Supabase
-                            // Por enquanto, simula o envio
-                            await new Promise(resolve => setTimeout(resolve, 1500));
+                            // Enviar para o Supabase
+                            const result = await submitMobileClosing(closingData);
 
-                            Alert.alert(
-                                '✅ Enviado!',
-                                'Seu registro foi enviado com sucesso.',
-                                [{
-                                    text: 'OK',
-                                    onPress: () => {
-                                        // Limpar formulário
-                                        setRegistro({
-                                            valorCartao: '',
-                                            valorNota: '',
-                                            valorPix: '',
-                                            valorDinheiro: '',
-                                            faltaCaixa: '',
-                                            observacoes: '',
-                                        });
-                                    }
-                                }]
-                            );
+                            if (result.success) {
+                                Alert.alert(
+                                    '✅ Enviado!',
+                                    result.message,
+                                    [{
+                                        text: 'OK',
+                                        onPress: () => {
+                                            // Limpar formulário
+                                            setRegistro({
+                                                valorCartao: '',
+                                                valorNota: '',
+                                                valorPix: '',
+                                                valorDinheiro: '',
+                                                faltaCaixa: '',
+                                                observacoes: '',
+                                            });
+                                        }
+                                    }]
+                                );
+                            } else {
+                                Alert.alert('❌ Erro', result.message);
+                            }
                         } catch (error) {
-                            Alert.alert('Erro', 'Não foi possível enviar o registro. Tente novamente.');
+                            console.error('Error submitting closing:', error);
+                            Alert.alert(
+                                'Erro',
+                                'Não foi possível enviar o registro. Verifique sua conexão e tente novamente.'
+                            );
                         } finally {
                             setSubmitting(false);
                         }
