@@ -12,6 +12,7 @@ export interface Frentista {
     data_admissao: string | null;
     ativo: boolean;
     user_id: string | null;
+    turno_id?: number | null;
 }
 
 export interface Turno {
@@ -85,6 +86,21 @@ export const frentistaService = {
             return null;
         }
 
+        return data;
+    },
+
+    async update(id: number, updates: Partial<Frentista>): Promise<Frentista | null> {
+        const { data, error } = await supabase
+            .from('Frentista')
+            .update(updates)
+            .eq('id', id)
+            .select()
+            .single();
+
+        if (error) {
+            console.error('Error updating frentista:', error);
+            return null;
+        }
         return data;
     },
 };
@@ -365,9 +381,14 @@ export async function submitMobileClosing(closingData: SubmitClosingData): Promi
         await fechamentoService.updateTotals(
             fechamento.id,
             totalInformado,
-            0, // Total de vendas será preenchido pelo painel
+            fechamento.total_vendas || 0,
             closingData.observacoes
         );
+
+        // 8. Atualizar turno atual do frentista
+        await frentistaService.update(frentista.id, {
+            turno_id: closingData.turno_id
+        });
 
         return {
             success: true,

@@ -1,7 +1,7 @@
-import { View, Text, TextInput, TouchableOpacity, ScrollView, Alert, ActivityIndicator, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, ScrollView, Alert, ActivityIndicator, KeyboardAvoidingView, Platform, Modal, FlatList } from 'react-native';
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
-import { submitMobileClosing, turnoService, type SubmitClosingData } from '../../lib/api';
+import { submitMobileClosing, turnoService, frentistaService, type SubmitClosingData } from '../../lib/api';
 import {
     CreditCard,
     Receipt,
@@ -133,31 +133,52 @@ export default function RegistroScreen() {
         fetchUser();
     }, []);
 
-    // Determinar turno atual usando o service
+    const [turnos, setTurnos] = useState<any[]>([]);
+    const [modalTurnoVisible, setModalTurnoVisible] = useState(false);
+
+    // ... (rest of the state)
+
+    // Determinar turno atual e carregar lista
     useEffect(() => {
-        async function loadTurno() {
+        async function loadTurnos() {
             try {
-                const turno = await turnoService.getCurrentTurno();
-                if (turno) {
-                    setTurnoAtual(turno.nome);
-                    setTurnoId(turno.id);
+                // Carregar todos os turnos
+                const todosTurnos = await turnoService.getAll();
+                setTurnos(todosTurnos);
+
+                // Tentar identificar o turno atual automaticamente
+                const turnoAuto = await turnoService.getCurrentTurno();
+
+                if (turnoAuto) {
+                    setTurnoAtual(turnoAuto.nome);
+                    setTurnoId(turnoAuto.id);
+                } else if (todosTurnos.length > 0) {
+                    // Fallback para o primeiro da lista
+                    setTurnoAtual(todosTurnos[0].nome);
+                    setTurnoId(todosTurnos[0].id);
                 } else {
-                    // Fallback para detecção por hora
-                    const hour = new Date().getHours();
-                    if (hour >= 6 && hour < 14) {
-                        setTurnoAtual('Manhã');
-                    } else if (hour >= 14 && hour < 22) {
-                        setTurnoAtual('Tarde');
-                    } else {
-                        setTurnoAtual('Noite');
-                    }
+                    setTurnoAtual('Selecione');
                 }
             } catch (error) {
-                console.error('Error loading turno:', error);
-                setTurnoAtual('Turno Atual');
+                console.error('Error loading turnos:', error);
+                setTurnoAtual('Selecione');
             }
         }
-        loadTurno();
+        loadTurnos();
+
+        // Subscription para atualizações em tempo real
+        const subscription = supabase
+            .channel('turnos_changes')
+            .on(
+                'postgres_changes',
+                { event: '*', schema: 'public', table: 'Turno' },
+                () => loadTurnos()
+            )
+            .subscribe();
+
+        return () => {
+            subscription.unsubscribe();
+        };
     }, []);
 
     const handleSubmit = async () => {
@@ -300,12 +321,69 @@ export default function RegistroScreen() {
                                 <Text className="text-sm text-gray-500">Registre seu turno</Text>
                             </View>
                         </View>
-                        <View className="bg-primary-50 px-4 py-2 rounded-full flex-row items-center gap-2">
+                        <TouchableOpacity
+                            className="bg-primary-50 px-4 py-2 rounded-full flex-row items-center gap-2 border border-primary-100"
+                            onPress={() => setModalTurnoVisible(true)}
+                        >
                             <Clock size={16} color="#b91c1c" />
                             <Text className="text-primary-700 font-bold text-sm">{turnoAtual}</Text>
-                        </View>
+                            <ChevronDown size={14} color="#b91c1c" />
+                        </TouchableOpacity>
                     </View>
                 </View>
+
+                {/* Modal de Seleção de Turno */}
+                <Modal
+                    visible={modalTurnoVisible}
+                    transparent={true}
+                    animationType="fade"
+                    onRequestClose={() => setModalTurnoVisible(false)}
+                >
+                    <View className="flex-1 bg-black/50 justify-center items-center p-5">
+                        <View className="bg-white w-full rounded-2xl overflow-hidden shadow-xl" style={{ maxHeight: '50%' }}>
+                            <View className="bg-primary-700 p-4 flex-row justify-between items-center">
+                                <Text className="text-white font-bold text-lg">Selecione o Turno</Text>
+                                <TouchableOpacity onPress={() => setModalTurnoVisible(false)}>
+                                    <Text className="text-white font-medium">Fechar</Text>
+                                </TouchableOpacity>
+                            </View>
+
+                            <FlatList
+                                data={turnos}
+                                keyExtractor={(item) => item.id.toString()}
+                                renderItem={({ item }) => (
+                                    <TouchableOpacity
+                                        className={`p-4 border-b border-gray-100 flex-row justify-between items-center ${item.id === turnoId ? 'bg-primary-50' : 'bg-white'}`}
+                                        onPress={async () => {
+                                            setTurnoId(item.id);
+                                            setTurnoAtual(item.nome);
+                                            setModalTurnoVisible(false);
+
+                                            // Sincroniza turno imediatamente com o banco
+                                            const { data: { user } } = await supabase.auth.getUser();
+                                            if (user) {
+                                                const frentista = await frentistaService.getByUserId(user.id);
+                                                if (frentista) {
+                                                    await frentistaService.update(frentista.id, { turno_id: item.id });
+                                                }
+                                            }
+                                        }}
+                                    >
+                                        <View>
+                                            <Text className={`font-bold ${item.id === turnoId ? 'text-primary-700' : 'text-gray-800'}`}>
+                                                {item.nome}
+                                            </Text>
+                                            <Text className="text-gray-500 text-xs mt-1">
+                                                {item.horario_inicio} - {item.horario_fim}
+                                            </Text>
+                                        </View>
+                                        {item.id === turnoId && <Check size={20} color="#b91c1c" />}
+                                    </TouchableOpacity>
+                                )}
+                            />
+                        </View>
+                    </View>
+                </Modal>
 
                 {/* Seção de Valores */}
                 <View className="px-4 mt-6">

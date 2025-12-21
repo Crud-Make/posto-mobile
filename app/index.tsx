@@ -1,5 +1,5 @@
-import { View, Text, TextInput, TouchableOpacity, Alert, ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
-import { useState } from 'react';
+import { View, Text, TextInput, TouchableOpacity, Alert, ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, Image } from 'react-native';
+import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { router } from 'expo-router';
 import { Fuel, Eye, EyeOff, LogIn } from 'lucide-react-native';
@@ -8,7 +8,26 @@ export default function Login() {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [loading, setLoading] = useState(false);
+    const [checkingSession, setCheckingSession] = useState(true);
     const [showPassword, setShowPassword] = useState(false);
+    const [rememberMe, setRememberMe] = useState(true);
+
+    useEffect(() => {
+        checkSession();
+    }, []);
+
+    async function checkSession() {
+        try {
+            const { data: { session } } = await supabase.auth.getSession();
+            if (session) {
+                router.replace('/(tabs)/registro');
+            }
+        } catch (e) {
+            console.error('Erro ao verificar sessão:', e);
+        } finally {
+            setCheckingSession(false);
+        }
+    }
 
     async function signInWithEmail() {
         if (!email || !password) {
@@ -30,9 +49,18 @@ export default function Login() {
         setLoading(false);
     }
 
+    if (checkingSession) {
+        return (
+            <View className="flex-1 bg-primary-700 items-center justify-center">
+                <ActivityIndicator size="large" color="#FFF" />
+                <Text className="text-white mt-4 font-medium">Verificando acesso...</Text>
+            </View>
+        );
+    }
+
     return (
         <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
             className="flex-1 bg-primary-700"
         >
             <ScrollView
@@ -42,8 +70,12 @@ export default function Login() {
             >
                 {/* Header com Logo */}
                 <View className="items-center pt-16 pb-8">
-                    <View className="w-24 h-24 bg-white rounded-full items-center justify-center shadow-2xl mb-6">
-                        <Fuel size={48} color="#b91c1c" strokeWidth={2} />
+                    <View className="w-28 h-28 bg-white rounded-full items-center justify-center shadow-2xl mb-6 overflow-hidden">
+                        <Image
+                            source={require('../assets/logo.png')}
+                            className="w-24 h-24"
+                            resizeMode="contain"
+                        />
                     </View>
                     <Text className="text-white text-3xl font-bold tracking-tight">Posto Providência</Text>
                     <Text className="text-primary-200 text-base mt-2">App do Frentista</Text>
@@ -95,6 +127,18 @@ export default function Login() {
                         </View>
                     </View>
 
+                    {/* Manter Conectado */}
+                    <TouchableOpacity
+                        className="flex-row items-center mb-8 ml-1"
+                        onPress={() => setRememberMe(!rememberMe)}
+                        activeOpacity={0.7}
+                    >
+                        <View className={`w-6 h-6 rounded-md border-2 items-center justify-center mr-3 ${rememberMe ? 'bg-primary-700 border-primary-700' : 'border-gray-300'}`}>
+                            {rememberMe && <View className="w-2 h-2 bg-white rounded-full" />}
+                        </View>
+                        <Text className="text-gray-600 font-medium">Manter conectado</Text>
+                    </TouchableOpacity>
+
                     {/* Botão Entrar */}
                     <TouchableOpacity
                         className={`w-full py-4 rounded-2xl items-center flex-row justify-center gap-3 ${loading ? 'bg-primary-400' : 'bg-primary-700'}`}
@@ -115,6 +159,14 @@ export default function Login() {
                     {/* Link de ajuda */}
                     <TouchableOpacity className="mt-6 items-center">
                         <Text className="text-primary-600 font-medium">Esqueceu a senha?</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                        className="mt-6 items-center flex-row justify-center gap-1"
+                        onPress={() => router.push('/cadastrar')}
+                    >
+                        <Text className="text-gray-500">Não tem uma conta?</Text>
+                        <Text className="text-primary-700 font-bold">Cadastre-se</Text>
                     </TouchableOpacity>
 
                     {/* Versão */}

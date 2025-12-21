@@ -23,6 +23,7 @@
         "backgroundColor": "#b91c1c"
       },
       "package": "com.postoProvidencia.frentista",
+      "googleServicesFile": "./google-services.json",
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false
     },
@@ -31,7 +32,32 @@
     },
     "plugins": [
       "expo-router",
-      "expo-secure-store"
-    ]
+      "expo-secure-store",
+      [
+        "expo-notifications",
+        {
+          "color": "#b91c1c",
+          "defaultChannel": "default"
+        }
+      ]
+    ],
+    "notification": {
+      "icon": "./assets/icon.png",
+      "color": "#b91c1c",
+      "androidMode": "default",
+      "androidCollapsedTitle": "Posto Providência"
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "e62f5bc8-d8ea-42cc-82b2-8fddace513db"
+      }
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/e62f5bc8-d8ea-42cc-82b2-8fddace513db"
+    }
   }
 }
