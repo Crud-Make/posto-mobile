@@ -53,7 +53,7 @@ export default function SignUp() {
         setLoading(true);
 
         try {
-            // 1. Criar usuário no Auth (Passando metadados para o trigger do banco)
+            // 1. Criar usuário no Auth
             const { data: authData, error: authError } = await supabase.auth.signUp({
                 email,
                 password,
@@ -67,19 +67,75 @@ export default function SignUp() {
                 }
             });
 
-            if (authError) throw authError;
+            if (authError) {
+                // Se o erro for do trigger, tentar criar sem trigger
+                if (authError.message.includes('Database error')) {
+                    // Tentar signup sem metadados (sem trigger)
+                    const { data: authData2, error: authError2 } = await supabase.auth.signUp({
+                        email,
+                        password
+                    });
+
+                    if (authError2) throw authError2;
+
+                    if (authData2?.user) {
+                        // Criar Frentista manualmente
+                        const { error: frentistaError } = await supabase
+                            .from('Frentista')
+                            .insert({
+                                nome: name,
+                                cpf: cpf,
+                                telefone: phone,
+                                posto_id: selectedPosto.id,
+                                user_id: authData2.user.id,
+                                ativo: true,
+                                data_admissao: new Date().toISOString().split('T')[0]
+                            });
+
+                        if (frentistaError) {
+                            console.error('Erro ao criar frentista:', frentistaError);
+                            // Não bloquear - usuário foi criado
+                        }
+
+                        Alert.alert('Sucesso', 'Conta criada com sucesso!', [
+                            { text: 'OK', onPress: () => router.back() }
+                        ]);
+                        return;
+                    }
+                }
+                throw authError;
+            }
 
             if (authData?.user) {
-                // NOTA: No Supabase deste projeto, existe um TRIGGER chamado 'on_auth_user_created'
-                // que automaticamente cria os registros nas tabelas 'Usuario' e 'Frentista'
-                // usando os dados passados em 'raw_user_meta_data'.
+                // O trigger pode ter criado o frentista automaticamente
+                // Verificar se existe, senão criar manualmente
+                const { data: existingFrentista } = await supabase
+                    .from('Frentista')
+                    .select('id')
+                    .eq('user_id', authData.user.id)
+                    .maybeSingle();
+
+                if (!existingFrentista) {
+                    // Criar Frentista manualmente
+                    await supabase
+                        .from('Frentista')
+                        .insert({
+                            nome: name,
+                            cpf: cpf,
+                            telefone: phone,
+                            posto_id: selectedPosto.id,
+                            user_id: authData.user.id,
+                            ativo: true,
+                            data_admissao: new Date().toISOString().split('T')[0]
+                        });
+                }
 
                 Alert.alert('Sucesso', 'Conta criada com sucesso!', [
                     { text: 'OK', onPress: () => router.back() }
                 ]);
             }
         } catch (error: any) {
-            // Se o trigger falhar, o Supabase Auth retorna "Database error saving new user"
+            console.error('Erro no cadastro:', error);
             Alert.alert('Erro', error.message || 'Ocorreu um erro ao criar a conta');
         } finally {
             setLoading(false);

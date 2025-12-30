@@ -18,27 +18,51 @@ export default function TabsLayout() {
 
     async function checkFrentistaStatus() {
         try {
-            const { data: { user } } = await supabase.auth.getUser();
-            if (!user) {
-                router.replace('/');
-                return;
-            }
+            // Timeout de segurança de 5 segundos
+            const timeoutPromise = new Promise((_, reject) =>
+                setTimeout(() => reject(new Error('Timeout verificando status')), 5000)
+            );
 
-            // Check if user is admin (admins can access without frentista record)
-            const userProfile = await usuarioService.getByEmail(user.email!);
-            if (userProfile?.role === 'ADMIN') {
-                setIsAdmin(true);
-                setChecking(false);
-                return;
-            }
+            const checkPromise = (async () => {
+                const { data: { user } } = await supabase.auth.getUser();
+                if (!user) {
+                    router.replace('/');
+                    return;
+                }
 
-            // Check if frentista exists and is active
-            const frentista = await frentistaService.getByUserId(user.id);
-            if (!frentista) {
-                setAccountBlocked(true);
-            }
+                // Check if user is admin (admins can access without frentista record)
+                const userProfile = await usuarioService.getByEmail(user.email!);
+                if (userProfile?.role === 'ADMIN') {
+                    setIsAdmin(true);
+                    return;
+                }
+
+                // Check if frentista exists and is active
+                const frentista = await frentistaService.getByUserId(user.id);
+                if (!frentista) {
+                    setAccountBlocked(true);
+                    return;
+                }
+
+                // Verificar se tem caixa aberto hoje
+                const { data: statusCaixa, error: rpcError } = await supabase.rpc('verificar_caixa_aberto', {
+                    p_frentista_id: frentista.id
+                });
+
+                if (!rpcError && statusCaixa && !statusCaixa.aberto) {
+                    // Se não tiver caixa aberto, redireciona para tela de abertura
+                    router.replace('/abertura-caixa');
+                    // Não chamamos setChecking(false) aqui pois vamos sair dessa rota
+                    return;
+                }
+            })();
+
+            await Promise.race([checkPromise, timeoutPromise]);
         } catch (error) {
             console.error('Error checking frentista status:', error);
+            // Em caso de erro/timeout, liberamos o acesso para não travar o app
+            // O backend ainda vai proteger as rotas se necessário
+            setChecking(false);
         } finally {
             setChecking(false);
         }

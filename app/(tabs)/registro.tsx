@@ -46,6 +46,7 @@ interface RegistroTurno {
     valorCartaoCredito: string;
     valorPix: string;
     valorDinheiro: string;
+    valorBaratao: string;
     observacoes: string;
 }
 
@@ -79,6 +80,7 @@ export default function RegistroScreen() {
         valorCartaoCredito: '',
         valorPix: '',
         valorDinheiro: '',
+        valorBaratao: '',
         observacoes: '',
     });
 
@@ -127,7 +129,7 @@ export default function RegistroScreen() {
     const valorEncerrante = parseValue(registro.valorEncerrante);
     const totalCartao = parseValue(registro.valorCartaoDebito) + parseValue(registro.valorCartaoCredito);
     const totalNotas = notasAdicionadas.reduce((acc, current) => acc + current.valor_number, 0);
-    const totalInformado = totalCartao + totalNotas + parseValue(registro.valorPix) + parseValue(registro.valorDinheiro);
+    const totalInformado = totalCartao + totalNotas + parseValue(registro.valorPix) + parseValue(registro.valorDinheiro) + parseValue(registro.valorBaratao);
     const diferencaCaixa = valorEncerrante - totalInformado;
     const temFalta = diferencaCaixa > 0;
     const temSobra = diferencaCaixa < 0;
@@ -143,6 +145,7 @@ export default function RegistroScreen() {
                 // 1. Dados do Usuário e Role
                 const { data: { user } } = await supabase.auth.getUser();
                 let userRole = 'FRENTISTA';
+                let currentFrentistaId: number | null = null;
 
                 if (user) {
                     // Buscar perfil para ver se é ADMIN
@@ -156,6 +159,7 @@ export default function RegistroScreen() {
                     if (frentistaData) {
                         setUserName(frentistaData.nome);
                         setFrentistaId(frentistaData.id);
+                        currentFrentistaId = frentistaData.id;
                     } else if (user.email) {
                         const name = user.email.split('@')[0];
                         setUserName(name.charAt(0).toUpperCase() + name.slice(1));
@@ -174,7 +178,19 @@ export default function RegistroScreen() {
                 setClientes(clientesData);
                 setFrentistas(frentistasData);
 
-                if (turnoAuto) {
+                // Verificar Caixa Aberto
+                let caixaAbertoData = null;
+                if (userRole !== 'ADMIN' && currentFrentistaId) {
+                    const { data } = await supabase.rpc('verificar_caixa_aberto', {
+                        p_frentista_id: currentFrentistaId
+                    });
+                    caixaAbertoData = data;
+                }
+
+                if (caixaAbertoData && caixaAbertoData.aberto) {
+                    setTurnoAtual(caixaAbertoData.turno);
+                    setTurnoId(caixaAbertoData.turno_id);
+                } else if (turnoAuto) {
                     setTurnoAtual(turnoAuto.nome);
                     setTurnoId(turnoAuto.id);
                 } else if (turnosData.length > 0) {
@@ -281,6 +297,7 @@ export default function RegistroScreen() {
                                 valor_nota: totalNotas,
                                 valor_pix: parseValue(registro.valorPix),
                                 valor_dinheiro: parseValue(registro.valorDinheiro),
+                                valor_baratao: parseValue(registro.valorBaratao),
                                 valor_encerrante: valorEncerrante,
                                 falta_caixa: temFalta ? diferencaCaixa : 0,
                                 observacoes: registro.observacoes,
@@ -309,6 +326,7 @@ export default function RegistroScreen() {
                                                 valorCartaoCredito: '',
                                                 valorPix: '',
                                                 valorDinheiro: '',
+                                                valorBaratao: '',
                                                 observacoes: '',
                                             });
                                             setNotasAdicionadas([]);
@@ -603,6 +621,7 @@ export default function RegistroScreen() {
 
                     {renderInputField(FORMAS_PAGAMENTO[2], registro.valorPix, 'valorPix')}
                     {renderInputField(FORMAS_PAGAMENTO[3], registro.valorDinheiro, 'valorDinheiro')}
+                    {renderInputField({ id: 'baratao', label: 'Baratão', icon: CircleDollarSign, color: '#f59e0b', bgColor: '#fffbeb' }, registro.valorBaratao, 'valorBaratao')}
                 </View>
 
 
@@ -683,9 +702,15 @@ export default function RegistroScreen() {
                                     </View>
                                 )}
                                 {parseValue(registro.valorDinheiro) > 0 && (
-                                    <View className="flex-row justify-between items-center">
+                                    <View className="flex-row justify-between items-center mb-1">
                                         <Text className="text-gray-400 text-xs">Dinheiro</Text>
                                         <Text className="text-xs font-medium text-gray-600">{formatCurrency(parseValue(registro.valorDinheiro))}</Text>
+                                    </View>
+                                )}
+                                {parseValue(registro.valorBaratao) > 0 && (
+                                    <View className="flex-row justify-between items-center">
+                                        <Text className="text-gray-400 text-xs">Baratão</Text>
+                                        <Text className="text-xs font-medium text-gray-600">{formatCurrency(parseValue(registro.valorBaratao))}</Text>
                                     </View>
                                 )}
                             </View>

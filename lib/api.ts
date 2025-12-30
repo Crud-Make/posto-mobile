@@ -113,6 +113,7 @@ export interface FechamentoFrentista {
     valor_pix: number;
     valor_nota: number;
     valor_conferido: number;
+    baratao: number;
     diferenca: number;
     observacoes: string | null;
 }
@@ -125,6 +126,7 @@ export interface SubmitClosingData {
     valor_nota: number;
     valor_pix: number;
     valor_dinheiro: number;
+    valor_baratao: number;
     valor_encerrante: number;
     falta_caixa: number;
     observacoes: string;
@@ -433,6 +435,7 @@ export const fechamentoFrentistaService = {
         valor_pix: number;
         valor_dinheiro: number;
         valor_conferido: number;
+        baratao: number;
         encerrante?: number;
         diferenca_calculada?: number;
         observacoes?: string;
@@ -462,6 +465,7 @@ export const fechamentoFrentistaService = {
         valor_pix: number;
         valor_dinheiro: number;
         valor_conferido: number;
+        baratao: number;
         encerrante?: number;
         diferenca_calculada?: number;
         observacoes?: string;
@@ -611,7 +615,8 @@ export async function submitMobileClosing(closingData: SubmitClosingData): Promi
             closingData.valor_cartao_credito +
             closingData.valor_nota +
             closingData.valor_pix +
-            closingData.valor_dinheiro;
+            closingData.valor_dinheiro +
+            closingData.valor_baratao;
 
         const postoId = frentista.posto_id;
 
@@ -656,6 +661,7 @@ export async function submitMobileClosing(closingData: SubmitClosingData): Promi
                 valor_pix: closingData.valor_pix,
                 valor_dinheiro: closingData.valor_dinheiro,
                 valor_conferido: valorConferido,
+                baratao: closingData.valor_baratao,
                 encerrante: closingData.valor_encerrante,
                 diferenca_calculada: closingData.valor_encerrante - totalInformado,
                 observacoes: closingData.observacoes || undefined,
@@ -674,6 +680,7 @@ export async function submitMobileClosing(closingData: SubmitClosingData): Promi
                 valor_pix: closingData.valor_pix,
                 valor_dinheiro: closingData.valor_dinheiro,
                 valor_conferido: valorConferido,
+                baratao: closingData.valor_baratao,
                 encerrante: closingData.valor_encerrante,
                 diferenca_calculada: closingData.valor_encerrante - totalInformado,
                 observacoes: closingData.observacoes || undefined,
