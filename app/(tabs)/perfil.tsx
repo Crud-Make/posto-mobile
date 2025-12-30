@@ -1,10 +1,11 @@
-import { View, Text, ScrollView, TouchableOpacity, Alert, Image, ActivityIndicator } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, Alert, Image, ActivityIndicator, Modal, Share, Dimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { router } from 'expo-router';
 import * as Updates from 'expo-updates';
 import { frentistaService, escalaService, type Escala } from '../../lib/api';
+import QRCode from 'react-native-qrcode-svg';
 import {
     User,
     LogOut,
@@ -21,7 +22,11 @@ import {
     Award,
     Calendar,
     Briefcase,
-    RefreshCw
+    RefreshCw,
+    Share2,
+    X,
+    Download,
+    QrCode
 } from 'lucide-react-native';
 
 interface UserStats {
@@ -48,6 +53,10 @@ export default function PerfilScreen() {
     });
     const [folgas, setFolgas] = useState<Escala[]>([]);
     const [checkingUpdate, setCheckingUpdate] = useState(false);
+    const [showQRModal, setShowQRModal] = useState(false);
+
+    // URL do APK para download - atualizar com seu link real
+    const APK_DOWNLOAD_URL = 'https://expo.dev/accounts/thygas8477/projects/posto-frentista/builds';
 
     async function checkForUpdates() {
         if (__DEV__) {
@@ -84,6 +93,17 @@ export default function PerfilScreen() {
             Alert.alert('Erro', 'Falha ao verificar atualizações. Verifique sua conexão.');
         } finally {
             setCheckingUpdate(false);
+        }
+    }
+
+    async function handleShareApp() {
+        try {
+            await Share.share({
+                message: `📱 Baixe o App do Frentista!\n\nAcesse o link para baixar o aplicativo:\n${APK_DOWNLOAD_URL}\n\nOu peça para escanear o QR Code no app de quem já tem!`,
+                title: 'Compartilhar App Frentista',
+            });
+        } catch (error) {
+            console.error('Erro ao compartilhar:', error);
         }
     }
 
@@ -356,6 +376,15 @@ export default function PerfilScreen() {
                         iconColor="#8b5cf6"
                         iconBg="#f5f3ff"
                     />
+                    <View className="h-px bg-gray-100 ml-16" />
+                    <MenuItem
+                        icon={QrCode}
+                        label="Compartilhar App"
+                        subtitle="QR Code para baixar o app"
+                        iconColor="#059669"
+                        iconBg="#ecfdf5"
+                        onPress={() => setShowQRModal(true)}
+                    />
                 </View>
             </View>
 
@@ -403,6 +432,77 @@ export default function PerfilScreen() {
             <Text className="text-center text-gray-400 text-xs mt-8" style={{ marginBottom: insets.bottom + 100 }}>
                 {postoNome} • Canal: {Updates.channel || 'development'}
             </Text>
+
+            {/* Modal QR Code */}
+            <Modal
+                visible={showQRModal}
+                transparent
+                animationType="fade"
+                onRequestClose={() => setShowQRModal(false)}
+            >
+                <View className="flex-1 bg-black/60 items-center justify-center px-6">
+                    <View
+                        className="bg-white rounded-3xl p-6 w-full max-w-sm"
+                        style={{ shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.3, shadowRadius: 20, elevation: 20 }}
+                    >
+                        {/* Header */}
+                        <View className="flex-row items-center justify-between mb-6">
+                            <View className="flex-row items-center gap-3">
+                                <View className="w-10 h-10 bg-green-100 rounded-xl items-center justify-center">
+                                    <QrCode size={22} color="#059669" />
+                                </View>
+                                <View>
+                                    <Text className="text-lg font-bold text-gray-800">Compartilhar App</Text>
+                                    <Text className="text-xs text-gray-400">Escaneie o QR Code</Text>
+                                </View>
+                            </View>
+                            <TouchableOpacity
+                                onPress={() => setShowQRModal(false)}
+                                className="w-8 h-8 bg-gray-100 rounded-full items-center justify-center"
+                            >
+                                <X size={18} color="#6b7280" />
+                            </TouchableOpacity>
+                        </View>
+
+                        {/* QR Code */}
+                        <View className="items-center bg-gray-50 rounded-2xl p-6 mb-6">
+                            <QRCode
+                                value={APK_DOWNLOAD_URL}
+                                size={180}
+                                color="#1f2937"
+                                backgroundColor="transparent"
+                            />
+                        </View>
+
+                        {/* Instruções */}
+                        <View className="bg-blue-50 p-4 rounded-xl mb-4 border border-blue-100">
+                            <Text className="text-sm text-blue-800 text-center leading-5">
+                                📱 Peça para o colega escanear este QR Code com a câmera do celular para baixar o app!
+                            </Text>
+                        </View>
+
+                        {/* Botões */}
+                        <View className="gap-3">
+                            <TouchableOpacity
+                                className="bg-green-600 py-4 rounded-xl flex-row items-center justify-center gap-2"
+                                onPress={handleShareApp}
+                                activeOpacity={0.8}
+                            >
+                                <Share2 size={20} color="#fff" />
+                                <Text className="text-white font-bold text-base">Enviar Link</Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity
+                                className="bg-gray-100 py-3 rounded-xl"
+                                onPress={() => setShowQRModal(false)}
+                                activeOpacity={0.7}
+                            >
+                                <Text className="text-gray-600 font-semibold text-center">Fechar</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
         </ScrollView>
     );
 }
