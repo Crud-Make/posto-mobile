@@ -129,6 +129,7 @@ export interface SubmitClosingData {
     falta_caixa: number;
     observacoes: string;
     posto_id: number;
+    frentista_id?: number;
     notas?: NotaFrentistaInput[];
 }
 
@@ -169,6 +170,21 @@ export const frentistaService = {
             return null;
         }
         return data;
+    },
+    async getAllByPosto(postoId: number): Promise<Frentista[]> {
+        const { data, error } = await supabase
+            .from('Frentista')
+            .select('*')
+            .eq('posto_id', postoId)
+            .eq('ativo', true)
+            .order('nome');
+
+        if (error) {
+            console.error('Error fetching frentistas by posto:', error);
+            return [];
+        }
+
+        return data || [];
     },
 };
 
@@ -346,14 +362,41 @@ export const fechamentoService = {
     },
 
     /**
-     * Atualiza os totais do fechamento
+     * Atualiza os totais do fechamento baseado na soma do que foi informado pelos frentistas
      */
     async updateTotals(
         fechamentoId: number,
-        totalRecebido: number,
-        totalVendas: number,
+        totalVendasManual: number = 0,
         observacoes?: string
     ): Promise<void> {
+        // Busca todos os fechamentos de frentistas para este fechamento
+        const { data: frentistasData, error: frentistasError } = await supabase
+            .from('FechamentoFrentista')
+            .select('valor_cartao_debito, valor_cartao_credito, valor_nota, valor_pix, valor_dinheiro')
+            .eq('fechamento_id', fechamentoId);
+
+        if (frentistasError) {
+            throw new Error(`Erro ao buscar totais de frentistas: ${frentistasError.message}`);
+        }
+
+        const totalRecebido = (frentistasData || []).reduce((acc, item) => {
+            return acc +
+                (item.valor_cartao_debito || 0) +
+                (item.valor_cartao_credito || 0) +
+                (item.valor_nota || 0) +
+                (item.valor_pix || 0) +
+                (item.valor_dinheiro || 0);
+        }, 0);
+
+        // Se totalVendasManual for 0, podemos tentar usar a soma dos encerrantes ou manter o valor anterior
+        // Por enquanto, vamos atualizar apenas o total_recebido e a diferença
+        const { data: currentShift } = await supabase
+            .from('Fechamento')
+            .select('total_vendas')
+            .eq('id', fechamentoId)
+            .single();
+
+        const totalVendas = totalVendasManual || currentShift?.total_vendas || 0;
         const diferenca = totalRecebido - totalVendas;
 
         const { error } = await supabase
@@ -539,8 +582,21 @@ export async function submitMobileClosing(closingData: SubmitClosingData): Promi
             };
         }
 
-        // 3. Buscar frentista associado ao usuário
-        const frentista = await frentistaService.getByUserId(user.id);
+        // 3. Buscar frentista (se não informado, busca o do usuário logado)
+        let frentista;
+        if (closingData.frentista_id) {
+            const { data, error: fError } = await supabase
+                .from('Frentista')
+                .select('*')
+                .eq('id', closingData.frentista_id)
+                .single();
+            if (fError || !data) {
+                return { success: false, message: 'Frentista selecionado não encontrado.' };
+            }
+            frentista = data;
+        } else {
+            frentista = await frentistaService.getByUserId(user.id);
+        }
 
         if (!frentista) {
             return {
@@ -647,11 +703,9 @@ export async function submitMobileClosing(closingData: SubmitClosingData): Promi
         }
 
         // 8. Atualizar totais do fechamento geral
-        // Nota: Aqui estamos assumindo que o total de vendas será atualizado depois
-        // quando o gestor fizer o fechamento completo no painel
+        // Nota: O updateTotals agora soma automaticamente todos os frentistas do turno
         await fechamentoService.updateTotals(
             fechamento.id,
-            totalInformado,
             fechamento.total_vendas || 0,
             closingData.observacoes
         );

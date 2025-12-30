@@ -1,8 +1,15 @@
 import { Tabs } from 'expo-router';
 import { ClipboardList, History, User, Home, ShoppingBag } from 'lucide-react-native';
-import { View } from 'react-native';
+import { View, Platform } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function TabsLayout() {
+    const insets = useSafeAreaInsets();
+
+    // Calcula o padding inferior considerando a safe area do dispositivo
+    // Mínimo de 10px, máximo baseado nos insets do dispositivo
+    const bottomPadding = Math.max(10, insets.bottom + 5);
+
     return (
         <Tabs
             screenOptions={{
@@ -21,10 +28,10 @@ export default function TabsLayout() {
                     borderTopWidth: 1,
                     borderTopColor: '#f3f4f6',
                     paddingTop: 10,
-                    // Removemos altura fixa para respeitar o Safe Area do dispositivo
-                    height: 'auto',
-                    paddingBottom: 10,
-                    minHeight: 65,
+                    // Usa o padding dinâmico baseado na Safe Area do dispositivo
+                    paddingBottom: bottomPadding,
+                    // Altura mínima + padding inferior para dispositivos com botões virtuais
+                    minHeight: 65 + insets.bottom,
                 },
                 tabBarLabelStyle: {
                     fontSize: 11,

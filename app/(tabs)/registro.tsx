@@ -2,7 +2,7 @@ import { View, Text, TextInput, TouchableOpacity, ScrollView, Alert, ActivityInd
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
-import { submitMobileClosing, turnoService, frentistaService, clienteService, type SubmitClosingData, type Cliente, type Turno } from '../../lib/api';
+import { submitMobileClosing, turnoService, frentistaService, clienteService, usuarioService, type SubmitClosingData, type Cliente, type Turno, type Frentista } from '../../lib/api';
 import { usePosto } from '../../lib/PostoContext';
 import {
     CreditCard,
@@ -68,6 +68,10 @@ export default function RegistroScreen() {
     const [userName, setUserName] = useState('Frentista');
     const [turnoAtual, setTurnoAtual] = useState('Carregando...');
     const [turnoId, setTurnoId] = useState<number | null>(null);
+    const [frentistas, setFrentistas] = useState<Frentista[]>([]);
+    const [frentistaId, setFrentistaId] = useState<number | null>(null);
+    const [isAdmin, setIsAdmin] = useState(false);
+    const [modalFrentistaVisible, setModalFrentistaVisible] = useState(false);
 
     const [registro, setRegistro] = useState<RegistroTurno>({
         valorEncerrante: '',
@@ -136,27 +140,39 @@ export default function RegistroScreen() {
 
             setLoading(true);
             try {
-                // 1. Dados do Usuário
+                // 1. Dados do Usuário e Role
                 const { data: { user } } = await supabase.auth.getUser();
+                let userRole = 'FRENTISTA';
+
                 if (user) {
+                    // Buscar perfil para ver se é ADMIN
+                    const userProfile = await usuarioService.getByEmail(user.email!);
+                    if (userProfile?.role === 'ADMIN') {
+                        setIsAdmin(true);
+                        userRole = 'ADMIN';
+                    }
+
                     const frentistaData = await frentistaService.getByUserId(user.id);
-                    if (frentistaData?.nome) {
+                    if (frentistaData) {
                         setUserName(frentistaData.nome);
+                        setFrentistaId(frentistaData.id);
                     } else if (user.email) {
                         const name = user.email.split('@')[0];
                         setUserName(name.charAt(0).toUpperCase() + name.slice(1));
                     }
                 }
 
-                // 2. Turnos e Clientes em paralelo
-                const [turnosData, clientesData, turnoAuto] = await Promise.all([
+                // 2. Turnos, Clientes e Frentistas em paralelo
+                const [turnosData, clientesData, turnoAuto, frentistasData] = await Promise.all([
                     turnoService.getAll(postoAtivoId),
                     clienteService.getAll(postoAtivoId),
-                    turnoService.getCurrentTurno(postoAtivoId)
+                    turnoService.getCurrentTurno(postoAtivoId),
+                    frentistaService.getAllByPosto(postoAtivoId)
                 ]);
 
                 setTurnos(turnosData);
                 setClientes(clientesData);
+                setFrentistas(frentistasData);
 
                 if (turnoAuto) {
                     setTurnoAtual(turnoAuto.nome);
@@ -269,6 +285,7 @@ export default function RegistroScreen() {
                                 falta_caixa: temFalta ? diferencaCaixa : 0,
                                 observacoes: registro.observacoes,
                                 posto_id: postoAtivoId!,
+                                frentista_id: frentistaId || undefined,
                                 notas: notasAdicionadas.map(n => ({
                                     cliente_id: n.cliente_id,
                                     valor: n.valor_number
@@ -374,7 +391,14 @@ export default function RegistroScreen() {
                                 <User size={24} color="#b91c1c" />
                             </View>
                             <View>
-                                <Text className="text-lg font-bold text-gray-800">Olá, {userName}!</Text>
+                                <TouchableOpacity
+                                    onPress={() => isAdmin && setModalFrentistaVisible(true)}
+                                    className="flex-row items-center gap-1"
+                                    disabled={!isAdmin}
+                                >
+                                    <Text className="text-lg font-bold text-gray-800">Olá, {userName}!</Text>
+                                    {isAdmin && <ChevronDown size={16} color="#4b5563" />}
+                                </TouchableOpacity>
                                 <Text className="text-sm text-gray-500">{postoAtivo?.nome || 'Registre seu turno'}</Text>
                             </View>
                         </View>
@@ -437,6 +461,53 @@ export default function RegistroScreen() {
                                             </Text>
                                         </View>
                                         {item.id === turnoId && <Check size={20} color="#b91c1c" />}
+                                    </TouchableOpacity>
+                                )}
+                            />
+                        </View>
+                    </View>
+                </Modal>
+
+                {/* Modal de Seleção de Frentista (Apenas Admin) */}
+                <Modal
+                    visible={modalFrentistaVisible}
+                    transparent={true}
+                    animationType="fade"
+                    onRequestClose={() => setModalFrentistaVisible(false)}
+                >
+                    <View className="flex-1 bg-black/50 justify-center items-center p-5">
+                        <View className="bg-white w-full rounded-2xl overflow-hidden shadow-xl" style={{ maxHeight: '70%' }}>
+                            <View className="bg-primary-700 p-4 flex-row justify-between items-center">
+                                <Text className="text-white font-bold text-lg">Selecione o Frentista</Text>
+                                <TouchableOpacity onPress={() => setModalFrentistaVisible(false)}>
+                                    <X size={24} color="white" />
+                                </TouchableOpacity>
+                            </View>
+
+                            <FlatList
+                                data={frentistas}
+                                keyExtractor={(item) => item.id.toString()}
+                                renderItem={({ item }) => (
+                                    <TouchableOpacity
+                                        className={`p-4 border-b border-gray-100 flex-row justify-between items-center ${item.id === frentistaId ? 'bg-primary-50' : 'bg-white'}`}
+                                        onPress={() => {
+                                            setFrentistaId(item.id);
+                                            setUserName(item.nome);
+                                            setModalFrentistaVisible(false);
+                                        }}
+                                    >
+                                        <View className="flex-row items-center gap-3">
+                                            <View className="w-10 h-10 bg-gray-100 rounded-full items-center justify-center">
+                                                <User size={20} color="#6b7280" />
+                                            </View>
+                                            <View>
+                                                <Text className={`font-bold ${item.id === frentistaId ? 'text-primary-700' : 'text-gray-800'}`}>
+                                                    {item.nome}
+                                                </Text>
+                                                {item.cpf && <Text className="text-gray-400 text-xs">{item.cpf}</Text>}
+                                            </View>
+                                        </View>
+                                        {item.id === frentistaId && <Check size={20} color="#b91c1c" />}
                                     </TouchableOpacity>
                                 )}
                             />
