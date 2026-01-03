@@ -4,7 +4,7 @@ import { View, Platform, Text, ActivityIndicator, TouchableOpacity } from 'react
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
-import { frentistaService, usuarioService } from '../../lib/api';
+import { frentistaService, usuarioService, turnoService } from '../../lib/api';
 
 export default function TabsLayout() {
     const insets = useSafeAreaInsets();
@@ -38,7 +38,31 @@ export default function TabsLayout() {
                 }
 
                 // Check if frentista exists and is active
-                const frentista = await frentistaService.getByUserId(user.id);
+                let frentista = await frentistaService.getByUserId(user.id);
+
+                // Self-healing: Se não existir frentista mas o usuário está logado, criar automaticamente
+                if (!frentista && user.email) {
+                    console.log('Frentista não encontrado, tentando auto-criação para:', user.email);
+                    const metadata = user.user_metadata;
+                    const { data: newFrentista, error: createError } = await supabase
+                        .from('Frentista')
+                        .insert({
+                            nome: metadata.nome || user.email.split('@')[0],
+                            cpf: metadata.cpf || null,
+                            telefone: metadata.telefone || null,
+                            posto_id: metadata.posto_id || 1, // Fallback para posto 1 se não houver no metadado
+                            user_id: user.id,
+                            ativo: true,
+                            data_admissao: new Date().toISOString().split('T')[0]
+                        })
+                        .select()
+                        .single();
+
+                    if (!createError && newFrentista) {
+                        frentista = newFrentista;
+                    }
+                }
+
                 if (!frentista) {
                     setAccountBlocked(true);
                     return;
@@ -50,9 +74,23 @@ export default function TabsLayout() {
                 });
 
                 if (!rpcError && statusCaixa && !statusCaixa.aberto) {
-                    // Se não tiver caixa aberto, redireciona para tela de abertura
+                    // Tentativa de abertura automática para agilizar a entrada
+                    const turnoAuto = await turnoService.getCurrentTurno(frentista.posto_id);
+                    if (turnoAuto) {
+                        const { error: openError } = await supabase.rpc('abrir_caixa', {
+                            p_turno_id: turnoAuto.id,
+                            p_posto_id: frentista.posto_id,
+                            p_frentista_id: frentista.id
+                        });
+
+                        if (!openError) {
+                            setChecking(false);
+                            return;
+                        }
+                    }
+
+                    // Se falhar a abertura automática, cai na tela manual
                     router.replace('/abertura-caixa');
-                    // Não chamamos setChecking(false) aqui pois vamos sair dessa rota
                     return;
                 }
             })();
@@ -60,8 +98,6 @@ export default function TabsLayout() {
             await Promise.race([checkPromise, timeoutPromise]);
         } catch (error) {
             console.error('Error checking frentista status:', error);
-            // Em caso de erro/timeout, liberamos o acesso para não travar o app
-            // O backend ainda vai proteger as rotas se necessário
             setChecking(false);
         } finally {
             setChecking(false);

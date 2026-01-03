@@ -470,13 +470,14 @@ export default function RegistroScreen() {
                             </View>
                             <View>
                                 <TouchableOpacity
-                                    onPress={() => setModalFrentistaVisible(true)}
+                                    onPress={() => isAdmin && setModalFrentistaVisible(true)}
                                     className="flex-row items-center gap-1"
+                                    activeOpacity={isAdmin ? 0.7 : 1}
                                 >
                                     <Text className="text-lg font-bold text-gray-800">
                                         {frentistaId ? `Olá, ${userName}!` : 'Selecionar Frentista'}
                                     </Text>
-                                    <ChevronDown size={16} color="#4b5563" />
+                                    {isAdmin && <ChevronDown size={16} color="#4b5563" />}
                                 </TouchableOpacity>
                                 <Text className="text-sm text-gray-500">{postoAtivo?.nome || 'Registre seu turno'}</Text>
                             </View>
