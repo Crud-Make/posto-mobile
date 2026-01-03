@@ -106,6 +106,20 @@ export default function RegistroScreen() {
         return isNaN(parsed) ? 0 : parsed;
     };
 
+    // Função para limpar formulário ao trocar de frentista (Modo Dispositivo Compartilhado)
+    const resetFormulario = () => {
+        setRegistro({
+            valorEncerrante: '',
+            valorCartaoDebito: '',
+            valorCartaoCredito: '',
+            valorPix: '',
+            valorDinheiro: '',
+            valorBaratao: '',
+            observacoes: '',
+        });
+        setNotasAdicionadas([]);
+    };
+
     const formatCurrencyInput = (value: string) => {
         const onlyNumbers = value.replace(/\D/g, '');
         if (onlyNumbers === '') return '';
@@ -410,12 +424,13 @@ export default function RegistroScreen() {
                             </View>
                             <View>
                                 <TouchableOpacity
-                                    onPress={() => isAdmin && setModalFrentistaVisible(true)}
+                                    onPress={() => setModalFrentistaVisible(true)}
                                     className="flex-row items-center gap-1"
-                                    disabled={!isAdmin}
                                 >
-                                    <Text className="text-lg font-bold text-gray-800">Olá, {userName}!</Text>
-                                    {isAdmin && <ChevronDown size={16} color="#4b5563" />}
+                                    <Text className="text-lg font-bold text-gray-800">
+                                        {frentistaId ? `Olá, ${userName}!` : 'Selecionar Frentista'}
+                                    </Text>
+                                    <ChevronDown size={16} color="#4b5563" />
                                 </TouchableOpacity>
                                 <Text className="text-sm text-gray-500">{postoAtivo?.nome || 'Registre seu turno'}</Text>
                             </View>
@@ -486,48 +501,77 @@ export default function RegistroScreen() {
                     </View>
                 </Modal>
 
-                {/* Modal de Seleção de Frentista (Apenas Admin) */}
+                {/* Modal de Seleção de Frentista (Modo Dispositivo Compartilhado) */}
                 <Modal
                     visible={modalFrentistaVisible}
                     transparent={true}
-                    animationType="fade"
+                    animationType="slide"
                     onRequestClose={() => setModalFrentistaVisible(false)}
                 >
-                    <View className="flex-1 bg-black/50 justify-center items-center p-5">
-                        <View className="bg-white w-full rounded-2xl overflow-hidden shadow-xl" style={{ maxHeight: '70%' }}>
-                            <View className="bg-primary-700 p-4 flex-row justify-between items-center">
-                                <Text className="text-white font-bold text-lg">Selecione o Frentista</Text>
-                                <TouchableOpacity onPress={() => setModalFrentistaVisible(false)}>
-                                    <X size={24} color="white" />
+                    <View className="flex-1 bg-black/60 justify-end">
+                        <TouchableOpacity
+                            className="absolute inset-0"
+                            onPress={() => setModalFrentistaVisible(false)}
+                        />
+                        <View className="bg-white rounded-t-[32px] shadow-2xl" style={{ maxHeight: '60%' }}>
+                            {/* Header */}
+                            <View className="bg-primary-700 p-5 rounded-t-[32px] flex-row justify-between items-center">
+                                <View>
+                                    <Text className="text-white font-bold text-xl">Quem está trabalhando?</Text>
+                                    <Text className="text-primary-200 text-sm mt-0.5">{frentistas.length} frentistas ativos</Text>
+                                </View>
+                                <TouchableOpacity
+                                    onPress={() => setModalFrentistaVisible(false)}
+                                    className="bg-white/20 p-2 rounded-full"
+                                >
+                                    <X size={22} color="white" />
                                 </TouchableOpacity>
                             </View>
 
+                            {/* Lista de Frentistas */}
                             <FlatList
                                 data={frentistas}
                                 keyExtractor={(item) => item.id.toString()}
-                                renderItem={({ item }) => (
-                                    <TouchableOpacity
-                                        className={`p-4 border-b border-gray-100 flex-row justify-between items-center ${item.id === frentistaId ? 'bg-primary-50' : 'bg-white'}`}
-                                        onPress={() => {
-                                            setFrentistaId(item.id);
-                                            setUserName(item.nome);
-                                            setModalFrentistaVisible(false);
-                                        }}
-                                    >
-                                        <View className="flex-row items-center gap-3">
-                                            <View className="w-10 h-10 bg-gray-100 rounded-full items-center justify-center">
-                                                <User size={20} color="#6b7280" />
+                                contentContainerStyle={{ paddingVertical: 8 }}
+                                renderItem={({ item }) => {
+                                    const isSelected = item.id === frentistaId;
+                                    const inicial = item.nome.charAt(0).toUpperCase();
+                                    return (
+                                        <TouchableOpacity
+                                            className={`mx-4 my-1.5 p-4 rounded-2xl flex-row justify-between items-center ${isSelected ? 'bg-primary-50 border-2 border-primary-200' : 'bg-gray-50'}`}
+                                            onPress={() => {
+                                                // Se trocou de frentista, limpa o formulário
+                                                if (item.id !== frentistaId) {
+                                                    resetFormulario();
+                                                }
+                                                setFrentistaId(item.id);
+                                                setUserName(item.nome);
+                                                setModalFrentistaVisible(false);
+                                            }}
+                                            activeOpacity={0.7}
+                                        >
+                                            <View className="flex-row items-center gap-4">
+                                                {/* Avatar com Inicial */}
+                                                <View className={`w-12 h-12 rounded-full items-center justify-center ${isSelected ? 'bg-primary-700' : 'bg-gray-300'}`}>
+                                                    <Text className={`text-lg font-bold ${isSelected ? 'text-white' : 'text-gray-600'}`}>
+                                                        {inicial}
+                                                    </Text>
+                                                </View>
+                                                <View>
+                                                    <Text className={`text-base font-bold ${isSelected ? 'text-primary-700' : 'text-gray-800'}`}>
+                                                        {item.nome}
+                                                    </Text>
+                                                    <Text className="text-gray-400 text-xs">Toque para selecionar</Text>
+                                                </View>
                                             </View>
-                                            <View>
-                                                <Text className={`font-bold ${item.id === frentistaId ? 'text-primary-700' : 'text-gray-800'}`}>
-                                                    {item.nome}
-                                                </Text>
-                                                {item.cpf && <Text className="text-gray-400 text-xs">{item.cpf}</Text>}
-                                            </View>
-                                        </View>
-                                        {item.id === frentistaId && <Check size={20} color="#b91c1c" />}
-                                    </TouchableOpacity>
-                                )}
+                                            {isSelected && (
+                                                <View className="bg-primary-700 w-7 h-7 rounded-full items-center justify-center">
+                                                    <Check size={16} color="white" strokeWidth={3} />
+                                                </View>
+                                            )}
+                                        </TouchableOpacity>
+                                    );
+                                }}
                             />
                         </View>
                     </View>
