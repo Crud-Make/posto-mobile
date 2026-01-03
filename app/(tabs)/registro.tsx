@@ -320,11 +320,6 @@ export default function RegistroScreen() {
             return;
         }
 
-        if (temFalta && !registro.observacoes.trim()) {
-            Alert.alert('Atenção', 'Quando há falta de caixa, é obrigatório informar uma observação');
-            return;
-        }
-
         if (!turnoId) {
             Alert.alert('Erro', 'Não foi possível identificar o turno. Tente novamente mais tarde.');
             return;
@@ -867,29 +862,6 @@ export default function RegistroScreen() {
                 </View>
 
 
-
-                {/* Seção de Observações */}
-                <View className="px-4 mt-6">
-                    <Text className="text-lg font-bold text-gray-800 mb-1">📝 Observações</Text>
-                    <Text className="text-sm text-gray-500 mb-4">
-                        {temFalta ? 'Obrigatório - Explique a falta' : 'Opcional - Informações adicionais'}
-                    </Text>
-
-                    <View
-                        className={`bg-white rounded-2xl border-2 overflow-hidden ${temFalta && !registro.observacoes ? 'border-red-300' : 'border-gray-100'}`}
-                        style={{ shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 }}
-                    >
-                        <TextInput
-                            className="p-4 text-base text-gray-800 min-h-[100px]"
-                            placeholder={temFalta ? 'Explique o motivo da falta de caixa...' : 'Observações do turno...'}
-                            placeholderTextColor="#9ca3af"
-                            value={registro.observacoes}
-                            onChangeText={(text) => setRegistro(prev => ({ ...prev, observacoes: text }))}
-                            multiline
-                            textAlignVertical="top"
-                        />
-                    </View>
-                </View>
 
                 {/* Card de Resumo */}
                 <View className="px-4 mt-6">
