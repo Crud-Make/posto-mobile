@@ -1,3 +1,14 @@
+/**
+ * RootLayout - Layout principal do aplicativo
+ * 
+ * FUNCIONALIDADES:
+ * - Gerenciamento de navegação (expo-router)
+ * - Push notifications
+ * - Contexto do Posto (PostoProvider)
+ * - Sistema de atualizações OTA automáticas (v1.4.0)
+ * 
+ * @version 1.4.0
+ */
 import { Stack, usePathname } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useRef } from 'react';
@@ -9,6 +20,7 @@ import {
 } from '../lib/notifications';
 import { supabase } from '../lib/supabase';
 import { PostoProvider } from '../lib/PostoContext';
+import { UpdateBanner } from '../lib/useUpdateChecker';
 import "../global.css";
 
 export default function RootLayout() {
@@ -55,6 +67,13 @@ export default function RootLayout() {
 
     return (
         <PostoProvider>
+            {/* Sistema de Atualizações OTA - Instant Reload
+              * Verifica automaticamente por atualizações ao abrir o app
+              * e quando o app volta ao foreground. Mostra prompt ao usuário
+              * quando uma atualização está pronta para ser aplicada.
+              */}
+            <UpdateBanner />
+
             <StatusBar style="light" backgroundColor="#b91c1c" />
             <Stack screenOptions={{ headerShown: false }}>
                 <Stack.Screen name="index" />

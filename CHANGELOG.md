@@ -15,6 +15,13 @@ Esta versão transforma o aplicativo em uma **plataforma universal** que pode se
 
 ### ✨ Adicionado
 - **Seleção de frentista SEMPRE visível**: Qualquer pessoa pode selecionar qual frentista está realizando o fechamento, independente de estar logado como admin ou não.
+- **Sistema de Atualizações OTA Inteligente** (`useUpdateChecker.ts`):
+  - Verificação automática ao abrir o app
+  - Verificação ao voltar ao foreground
+  - Download automático em background
+  - **Instant Reload**: Aplicação imediata de atualizações críticas
+  - Prompt amigável ao usuário quando atualização está pronta
+  - Suporte a Cross-native Runtime Deployments
 - Documentação detalhada com JSDoc nas funções principais.
 
 ### 🔄 Alterado
