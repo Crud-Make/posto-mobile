@@ -114,6 +114,7 @@ export interface FechamentoFrentista {
     valor_pix: number;
     valor_nota: number;
     valor_conferido: number;
+    valor_moedas: number;
     baratao: number;
     diferenca: number;
     observacoes: string | null;
@@ -456,6 +457,7 @@ export const fechamentoFrentistaService = {
         valor_nota: number;
         valor_pix: number;
         valor_dinheiro: number;
+        valor_moedas: number;
         valor_conferido: number;
         baratao: number;
         encerrante?: number;
@@ -486,6 +488,7 @@ export const fechamentoFrentistaService = {
         valor_nota: number;
         valor_pix: number;
         valor_dinheiro: number;
+        valor_moedas: number;
         valor_conferido: number;
         baratao: number;
         encerrante?: number;
@@ -717,6 +720,7 @@ export async function submitMobileClosing(closingData: SubmitClosingData): Promi
                 valor_nota: closingData.valor_nota,
                 valor_pix: closingData.valor_pix,
                 valor_dinheiro: closingData.valor_dinheiro,
+                valor_moedas: closingData.valor_moedas,
                 valor_conferido: valorConferido,
                 baratao: closingData.valor_baratao,
                 encerrante: closingData.valor_encerrante,
@@ -736,6 +740,7 @@ export async function submitMobileClosing(closingData: SubmitClosingData): Promi
                 valor_nota: closingData.valor_nota,
                 valor_pix: closingData.valor_pix,
                 valor_dinheiro: closingData.valor_dinheiro,
+                valor_moedas: closingData.valor_moedas,
                 valor_conferido: valorConferido,
                 baratao: closingData.valor_baratao,
                 encerrante: closingData.valor_encerrante,
