@@ -479,17 +479,21 @@ export default function RegistroScreen() {
                                     </Text>
                                     {isAdmin && <ChevronDown size={16} color="#4b5563" />}
                                 </TouchableOpacity>
-                                <Text className="text-sm text-gray-500">{postoAtivo?.nome || 'Registre seu turno'}</Text>
+                                <Text className="text-sm text-gray-500">{postoAtivo?.nome || 'Modo Diário'}</Text>
                             </View>
                         </View>
-                        <TouchableOpacity
+                        {/* Seletor de Turno - OCULTO (Modo Diário Simplificado) */}
+                        {/* <TouchableOpacity
                             className="bg-primary-50 px-4 py-2 rounded-full flex-row items-center gap-2 border border-primary-100"
                             onPress={() => setModalTurnoVisible(true)}
                         >
                             <Clock size={16} color="#b91c1c" />
                             <Text className="text-primary-700 font-bold text-sm">{turnoAtual}</Text>
                             <ChevronDown size={14} color="#b91c1c" />
-                        </TouchableOpacity>
+                        </TouchableOpacity> */}
+                        <View className="bg-gray-100 px-3 py-1.5 rounded-full">
+                            <Text className="text-gray-600 font-bold text-xs">{turnoAtual}</Text>
+                        </View>
                     </View>
                 </View>
 
