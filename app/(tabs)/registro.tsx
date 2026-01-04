@@ -22,7 +22,8 @@ import {
     Trash2,
     X,
     Search,
-    Coins
+    Coins,
+    Ban
 } from 'lucide-react-native';
 
 // Tipos
@@ -283,6 +284,16 @@ export default function RegistroScreen() {
     const handleAddNota = () => {
         if (!selectedCliente || !valorNotaTemp) {
             Alert.alert('Atenção', 'Selecione um cliente e informe o valor');
+            return;
+        }
+
+        // Verificar se o cliente está bloqueado
+        if (selectedCliente.bloqueado) {
+            Alert.alert(
+                'Cliente Bloqueado',
+                `O cliente ${selectedCliente.nome} está bloqueado e não pode realizar novas compras a prazo. Entre em contato com a administração.`,
+                [{ text: 'OK' }]
+            );
             return;
         }
 
@@ -1079,19 +1090,30 @@ export default function RegistroScreen() {
                                                             setBuscaCliente(''); // Limpa busca pra UX ficar top (ou não, dependendo, mas aqui fecha o modal depois né?)
                                                             // Ah, não, aqui só seleciona. Então talvez manter o texto ajude a confirmar. Mas vou limpar pra ficar clean.
                                                         }}
-                                                        className={`px-4 py-3 rounded-xl border-2 mb-2 w-full flex-row justify-between items-center ${selectedCliente?.id === cliente.id ? 'bg-cyan-600 border-cyan-600' : 'bg-white border-gray-200'}`}
+                                                        className={`px-4 py-3 rounded-xl border-2 mb-2 w-full flex-row justify-between items-center ${cliente.bloqueado ? 'bg-gray-200 border-gray-300 opacity-70' : selectedCliente?.id === cliente.id ? 'bg-cyan-600 border-cyan-600' : 'bg-white border-gray-200'}`}
                                                     >
                                                         <View className="flex-1">
-                                                            <Text className={`font-bold text-base ${selectedCliente?.id === cliente.id ? 'text-white' : 'text-gray-800'}`}>
-                                                                {cliente.nome}
-                                                            </Text>
+                                                            <View className="flex-row items-center gap-2">
+                                                                <Text className={`font-bold text-base ${cliente.bloqueado ? 'text-gray-500' : selectedCliente?.id === cliente.id ? 'text-white' : 'text-gray-800'}`}>
+                                                                    {cliente.nome}
+                                                                </Text>
+                                                                {cliente.bloqueado && (
+                                                                    <View className="bg-red-500 px-2 py-0.5 rounded">
+                                                                        <Text className="text-white text-[10px] font-bold">BLOQUEADO</Text>
+                                                                    </View>
+                                                                )}
+                                                            </View>
                                                             {cliente.documento && (
-                                                                <Text className={`text-xs mt-0.5 ${selectedCliente?.id === cliente.id ? 'text-cyan-100' : 'text-gray-400'}`}>
+                                                                <Text className={`text-xs mt-0.5 ${cliente.bloqueado ? 'text-gray-400' : selectedCliente?.id === cliente.id ? 'text-cyan-100' : 'text-gray-400'}`}>
                                                                     {cliente.documento}
                                                                 </Text>
                                                             )}
                                                         </View>
-                                                        {selectedCliente?.id === cliente.id && <Check size={20} color="white" />}
+                                                        {cliente.bloqueado ? (
+                                                            <Ban size={20} color="#ef4444" />
+                                                        ) : selectedCliente?.id === cliente.id ? (
+                                                            <Check size={20} color="white" />
+                                                        ) : null}
                                                     </TouchableOpacity>
                                                 ))
                                         )}

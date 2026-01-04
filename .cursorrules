@@ -29,5 +29,7 @@ Você é o parceiro de desenvolvimento do Thyago no projeto Posto Providência (
 - **Builds/Updates:** Antes de disparar um `eas update` ou `eas build`, valide todas as mudanças localmente.
 
 ## 🛠️ Regras de Negócio (Alinhamento com Dashboard)
+- **Documentação Obrigatória:** Todo código gerado ou modificado DEVE conter comentários explicativos (JSDoc ou comentários de linha) sobre a lógica introduzida.
+- **Limpeza de Branches:** Após o merge para a `main`, deletar branches temporárias.
 - **Modo Diário:** O aplicativo deve refletir a mesma simplificação do Dashboard (foco em dados diários, ocultando seleções de turno complexas quando possível).
 - **Design:** Manter a estética premium condizente com o sistema web.

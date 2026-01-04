@@ -95,6 +95,7 @@ export interface Cliente {
     documento?: string;
     posto_id?: number;
     ativo: boolean;
+    bloqueado?: boolean;
 }
 
 export interface NotaFrentistaInput {
