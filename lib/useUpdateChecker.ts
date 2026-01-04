@@ -262,7 +262,7 @@ export function UpdateBanner() {
         checkOnMount: true,
         checkOnForeground: true,
         autoDownload: true,
-        criticalUpdate: false // Mude para true para atualizações críticas
+        criticalUpdate: true // Sempre aplica automaticamente após baixar
     });
 
     // Em produção, quando uma atualização estiver pronta, mostra o prompt
