@@ -3,7 +3,7 @@
     "name": "Posto Providência - Frentista",
     "slug": "posto-frentista",
     "scheme": "posto-frentista",
-    "version": "1.4.3",
+    "version": "1.5.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -53,7 +53,7 @@
         "projectId": "e62f5bc8-d8ea-42cc-82b2-8fddace513db"
       }
     },
-    "runtimeVersion": "1.4.0",
+    "runtimeVersion": "1.5.0",
     "updates": {
       "url": "https://u.expo.dev/e62f5bc8-d8ea-42cc-82b2-8fddace513db"
     }
