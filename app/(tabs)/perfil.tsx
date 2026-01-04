@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import { router } from 'expo-router';
 import * as Updates from 'expo-updates';
+import { useUpdateChecker } from '../../lib/useUpdateChecker';
 import { frentistaService, escalaService, type Escala } from '../../lib/api';
 import QRCode from 'react-native-qrcode-svg';
 import {
@@ -52,47 +53,34 @@ export default function PerfilScreen() {
         taxaAcerto: 95.6,
     });
     const [folgas, setFolgas] = useState<Escala[]>([]);
-    const [checkingUpdate, setCheckingUpdate] = useState(false);
     const [showQRModal, setShowQRModal] = useState(false);
 
-    // URL do APK para download - atualizar com seu link real
+    // URL do APK para download - Link fixo para facilitar
     const APK_DOWNLOAD_URL = 'https://expo.dev/accounts/thygas8477/projects/posto-frentista/builds';
 
-    async function checkForUpdates() {
+    const {
+        status,
+        isUpdateAvailable,
+        checkingUpdate,
+        promptForUpdate,
+        checkForUpdate
+    } = useUpdateChecker({
+        checkOnMount: false, // O layout já faz isso
+        checkOnForeground: false,
+        autoDownload: true
+    });
+
+    async function handleCheckUpdates() {
         if (__DEV__) {
             Alert.alert('Modo DEV', 'Updates não funcionam em desenvolvimento local.');
             return;
         }
 
-        try {
-            setCheckingUpdate(true);
-            const update = await Updates.checkForUpdateAsync();
-            if (update.isAvailable) {
-                Alert.alert(
-                    'Atualização Disponível',
-                    'Uma nova versão do app está pronta. Baixar agora?',
-                    [
-                        { text: 'Não', style: 'cancel' },
-                        {
-                            text: 'Sim, Atualizar',
-                            onPress: async () => {
-                                try {
-                                    await Updates.fetchUpdateAsync();
-                                    await Updates.reloadAsync();
-                                } catch (e) {
-                                    Alert.alert('Erro', 'Falha ao aplicar atualização.');
-                                }
-                            }
-                        }
-                    ]
-                );
-            } else {
-                Alert.alert('Atualizado', 'Você já está usando a versão mais recente.');
-            }
-        } catch (error) {
-            Alert.alert('Erro', 'Falha ao verificar atualizações. Verifique sua conexão.');
-        } finally {
-            setCheckingUpdate(false);
+        const available = await checkForUpdate();
+        if (!available && status !== 'error') {
+            Alert.alert('Atualizado', 'Você já está usando a versão mais recente.');
+        } else if (status === 'error') {
+            Alert.alert('Aviso', 'Não foi possível buscar atualizações agora. Verifique sua rede e tente novamente em instantes.');
         }
     }
 
@@ -305,7 +293,7 @@ export default function PerfilScreen() {
                 >
                     <TouchableOpacity
                         className="flex-row items-center p-4 bg-white"
-                        onPress={checkForUpdates}
+                        onPress={handleCheckUpdates}
                         activeOpacity={0.7}
                         disabled={checkingUpdate}
                     >

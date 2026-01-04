@@ -245,6 +245,7 @@ export function useUpdateChecker(options?: {
 
     return {
         ...updateInfo,
+        checkingUpdate: updateInfo.status === 'checking',
         checkForUpdate,
         downloadUpdate,
         applyUpdate,
