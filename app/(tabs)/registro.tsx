@@ -573,8 +573,8 @@ export default function RegistroScreen() {
                                 <Gauge size={22} color="white" />
                             </View>
                             <View>
-                                <Text className="text-indigo-100 text-xs font-bold uppercase tracking-widest">Leitura da Bomba</Text>
-                                <Text className="text-white text-lg font-black">Encerrante Total</Text>
+                                <Text className="text-indigo-100 text-xs font-bold uppercase tracking-widest">Conferência de Vendas</Text>
+                                <Text className="text-white text-lg font-black">Total Vendido (R$)</Text>
                             </View>
                         </View>
 
