@@ -2,7 +2,7 @@ import { View, Text, TextInput, TouchableOpacity, ScrollView, Alert, ActivityInd
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
-import { submitMobileClosing, turnoService, frentistaService, clienteService, usuarioService, type SubmitClosingData, type Cliente, type Turno, type Frentista } from '../../lib/api';
+import { submitMobileClosing, turnoService, frentistaService, clienteService, type SubmitClosingData, type Cliente, type Turno, type Frentista } from '../../lib/api';
 import { usePosto } from '../../lib/PostoContext';
 import {
     CreditCard,
@@ -64,17 +64,16 @@ export default function RegistroScreen() {
     const insets = useSafeAreaInsets();
     const { postoAtivo, postoAtivoId } = usePosto();
 
-    // Estados principais
+    // Estados principais - Modo Plataforma Universal v1.4.0
     const [turnos, setTurnos] = useState<Turno[]>([]);
     const [clientes, setClientes] = useState<Cliente[]>([]);
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
     const [userName, setUserName] = useState('Frentista');
-    const [turnoAtual, setTurnoAtual] = useState('Carregando...');
+    const [turnoAtual, setTurnoAtual] = useState('Diário'); // Modo diário automático
     const [turnoId, setTurnoId] = useState<number | null>(null);
     const [frentistas, setFrentistas] = useState<Frentista[]>([]);
     const [frentistaId, setFrentistaId] = useState<number | null>(null);
-    const [isAdmin, setIsAdmin] = useState(false);
     const [modalFrentistaVisible, setModalFrentistaVisible] = useState(false);
     const [frentistasQueFecharam, setFrentistasQueFecharam] = useState<number[]>([]);
 
@@ -91,7 +90,7 @@ export default function RegistroScreen() {
 
     const [notasAdicionadas, setNotasAdicionadas] = useState<NotaItem[]>([]);
     const [modalNotaVisible, setModalNotaVisible] = useState(false);
-    const [modalTurnoVisible, setModalTurnoVisible] = useState(false);
+    // modalTurnoVisible REMOVIDO - Turno agora é automático (v1.4.0)
     const [selectedCliente, setSelectedCliente] = useState<Cliente | null>(null);
     const [valorNotaTemp, setValorNotaTemp] = useState('');
     const [buscaCliente, setBuscaCliente] = useState(''); // Novo estado para busca
@@ -188,36 +187,19 @@ export default function RegistroScreen() {
             }
         }
 
+        /**
+         * loadAllData - Carrega todos os dados necessários para a tela
+         * REFATORADO v1.4.0: Modo Universal sem verificação de admin
+         * - Turno é determinado automaticamente (getCurrentTurno)
+         * - Não há mais verificação de login/papel do usuário
+         * - Todos os frentistas são carregados para seleção
+         */
         async function loadAllData() {
             if (!postoAtivoId) return;
 
             setLoading(true);
             try {
-                // 1. Dados do Usuário e Role
-                const { data: { user } } = await supabase.auth.getUser();
-                let userRole = 'FRENTISTA';
-                let currentFrentistaId: number | null = null;
-
-                if (user) {
-                    // Buscar perfil para ver se é ADMIN
-                    const userProfile = await usuarioService.getByEmail(user.email!);
-                    if (userProfile?.role === 'ADMIN') {
-                        setIsAdmin(true);
-                        userRole = 'ADMIN';
-                    }
-
-                    const frentistaData = await frentistaService.getByUserId(user.id);
-                    if (frentistaData) {
-                        setUserName(frentistaData.nome);
-                        setFrentistaId(frentistaData.id);
-                        currentFrentistaId = frentistaData.id;
-                    } else if (user.email) {
-                        const name = user.email.split('@')[0];
-                        setUserName(name.charAt(0).toUpperCase() + name.slice(1));
-                    }
-                }
-
-                // 2. Turnos, Clientes e Frentistas em paralelo
+                // Carregar Turnos, Clientes e Frentistas em paralelo
                 const [turnosData, clientesData, turnoAuto, frentistasData] = await Promise.all([
                     turnoService.getAll(postoAtivoId),
                     clienteService.getAll(postoAtivoId),
@@ -229,34 +211,20 @@ export default function RegistroScreen() {
                 setClientes(clientesData);
                 setFrentistas(frentistasData);
 
-                // Verificar Caixa Aberto
-                let caixaAbertoData = null;
+                // Determinar turno automaticamente (Modo Diário)
                 let turnoIdFinal = null;
 
-                if (userRole !== 'ADMIN' && currentFrentistaId) {
-                    const { data } = await supabase.rpc('verificar_caixa_aberto', {
-                        p_frentista_id: currentFrentistaId
-                    });
-                    caixaAbertoData = data;
-                }
-
-                if (caixaAbertoData && caixaAbertoData.aberto) {
-                    setTurnoAtual(caixaAbertoData.turno);
-                    setTurnoId(caixaAbertoData.turno_id);
-                    turnoIdFinal = caixaAbertoData.turno_id;
-                } else if (turnoAuto) {
-                    setTurnoAtual(turnoAuto.nome);
+                if (turnoAuto) {
+                    // Usa o turno automático baseado na hora atual
                     setTurnoId(turnoAuto.id);
                     turnoIdFinal = turnoAuto.id;
                 } else if (turnosData.length > 0) {
-                    setTurnoAtual(turnosData[0].nome);
+                    // Fallback: primeiro turno disponível
                     setTurnoId(turnosData[0].id);
                     turnoIdFinal = turnosData[0].id;
-                } else {
-                    setTurnoAtual('Selecione');
                 }
 
-                // Carregar frentistas que já fecharam
+                // Carregar frentistas que já fecharam hoje
                 if (turnoIdFinal) {
                     await loadFrentistasQueFecharam(turnoIdFinal);
                 }
@@ -469,7 +437,11 @@ export default function RegistroScreen() {
                 contentContainerStyle={{ paddingBottom: insets.bottom + 180 }}
                 showsVerticalScrollIndicator={false}
             >
-                {/* Header Card */}
+                {/* Header Card - Modo Universal sem Login
+                 * ALTERAÇÃO v1.4.0: Dropdown de frentistas SEMPRE visível
+                 * Qualquer pessoa pode selecionar qual frentista está registrando
+                 * Turno é determinado automaticamente (igual ao dashboard web)
+                 */}
                 <View
                     className="mx-4 mt-4 p-5 bg-white rounded-3xl border border-gray-100"
                     style={{ shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.08, shadowRadius: 12, elevation: 4 }}
@@ -480,85 +452,31 @@ export default function RegistroScreen() {
                                 <User size={24} color="#b91c1c" />
                             </View>
                             <View>
+                                {/* Dropdown SEMPRE ativo - Modo Plataforma Universal */}
                                 <TouchableOpacity
-                                    onPress={() => isAdmin && setModalFrentistaVisible(true)}
+                                    onPress={() => setModalFrentistaVisible(true)}
                                     className="flex-row items-center gap-1"
-                                    activeOpacity={isAdmin ? 0.7 : 1}
+                                    activeOpacity={0.7}
                                 >
                                     <Text className="text-lg font-bold text-gray-800">
                                         {frentistaId ? `Olá, ${userName}!` : 'Selecionar Frentista'}
                                     </Text>
-                                    {isAdmin && <ChevronDown size={16} color="#4b5563" />}
+                                    <ChevronDown size={16} color="#4b5563" />
                                 </TouchableOpacity>
-                                <Text className="text-sm text-gray-500">{postoAtivo?.nome || 'Modo Diário'}</Text>
+                                <Text className="text-sm text-gray-500">{postoAtivo?.nome || 'Posto Providência'}</Text>
                             </View>
                         </View>
-                        {/* Seletor de Turno - OCULTO (Modo Diário Simplificado) */}
-                        {/* <TouchableOpacity
-                            className="bg-primary-50 px-4 py-2 rounded-full flex-row items-center gap-2 border border-primary-100"
-                            onPress={() => setModalTurnoVisible(true)}
-                        >
-                            <Clock size={16} color="#b91c1c" />
-                            <Text className="text-primary-700 font-bold text-sm">{turnoAtual}</Text>
-                            <ChevronDown size={14} color="#b91c1c" />
-                        </TouchableOpacity> */}
+                        {/* Badge de Modo Diário (apenas informativo, não clicável) */}
                         <View className="bg-gray-100 px-3 py-1.5 rounded-full">
-                            <Text className="text-gray-600 font-bold text-xs">{turnoAtual}</Text>
+                            <Text className="text-gray-600 font-bold text-xs">Diário</Text>
                         </View>
                     </View>
                 </View>
 
-                {/* Modal de Seleção de Turno */}
-                <Modal
-                    visible={modalTurnoVisible}
-                    transparent={true}
-                    animationType="fade"
-                    onRequestClose={() => setModalTurnoVisible(false)}
-                >
-                    <View className="flex-1 bg-black/50 justify-center items-center p-5">
-                        <View className="bg-white w-full rounded-2xl overflow-hidden shadow-xl" style={{ maxHeight: '50%' }}>
-                            <View className="bg-primary-700 p-4 flex-row justify-between items-center">
-                                <Text className="text-white font-bold text-lg">Selecione o Turno</Text>
-                                <TouchableOpacity onPress={() => setModalTurnoVisible(false)}>
-                                    <Text className="text-white font-medium">Fechar</Text>
-                                </TouchableOpacity>
-                            </View>
-
-                            <FlatList
-                                data={turnos}
-                                keyExtractor={(item) => item.id.toString()}
-                                renderItem={({ item }) => (
-                                    <TouchableOpacity
-                                        className={`p-4 border-b border-gray-100 flex-row justify-between items-center ${item.id === turnoId ? 'bg-primary-50' : 'bg-white'}`}
-                                        onPress={async () => {
-                                            setTurnoId(item.id);
-                                            setTurnoAtual(item.nome);
-                                            setModalTurnoVisible(false);
-
-                                            // Sincroniza turno imediatamente com o banco
-                                            if (postoAtivoId) {
-                                                const { data: { user } } = await supabase.auth.getUser();
-                                                if (user) {
-                                                    const frentista = await frentistaService.getByUserId(user.id);
-                                                    if (frentista) {
-                                                        await frentistaService.update(frentista.id, { turno_id: item.id });
-                                                    }
-                                                }
-                                            }
-                                        }}
-                                    >
-                                        <View>
-                                            <Text className={`font-bold ${item.id === turnoId ? 'text-primary-700' : 'text-gray-800'}`}>
-                                                {item.nome}
-                                            </Text>
-                                        </View>
-                                        {item.id === turnoId && <Check size={20} color="#b91c1c" />}
-                                    </TouchableOpacity>
-                                )}
-                            />
-                        </View>
-                    </View>
-                </Modal>
+                {/* Modal de Seleção de Turno - REMOVIDO em v1.4.0
+                 * Turno agora é determinado automaticamente pela hora do dia,
+                 * igual ao comportamento do dashboard web (Modo Diário).
+                 */}
 
                 {/* Modal de Seleção de Frentista (Modo Dispositivo Compartilhado) */}
                 <Modal
