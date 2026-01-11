@@ -14,7 +14,6 @@ import {
     Check,
     Send,
     Calculator,
-    CircleDollarSign,
     ChevronDown,
     Clock,
     User,
@@ -51,7 +50,6 @@ interface RegistroTurno {
     valorPix: string;
     valorDinheiro: string;
     valorMoedas: string;
-    valorBaratao: string;
     observacoes: string;
 }
 
@@ -87,7 +85,6 @@ export default function RegistroScreen() {
         valorPix: '',
         valorDinheiro: '',
         valorMoedas: '',
-        valorBaratao: '',
         observacoes: '',
     });
 
@@ -157,7 +154,6 @@ export default function RegistroScreen() {
             valorPix: '',
             valorDinheiro: '',
             valorMoedas: '',
-            valorBaratao: '',
             observacoes: '',
         });
         setNotasAdicionadas([]);
@@ -187,7 +183,7 @@ export default function RegistroScreen() {
     const totalCartao = parseValue(registro.valorCartaoDebito) + parseValue(registro.valorCartaoCredito);
     const totalNotas = notasAdicionadas.reduce((acc, current) => acc + current.valor_number, 0);
     const totalMoedas = parseValue(registro.valorMoedas);
-    const totalInformado = totalCartao + totalNotas + parseValue(registro.valorPix) + parseValue(registro.valorDinheiro) + totalMoedas + parseValue(registro.valorBaratao);
+    const totalInformado = totalCartao + totalNotas + parseValue(registro.valorPix) + parseValue(registro.valorDinheiro) + totalMoedas;
     const diferencaCaixa = valorEncerrante - totalInformado;
     const temFalta = diferencaCaixa > 0;
     const temSobra = diferencaCaixa < 0;
@@ -391,7 +387,6 @@ export default function RegistroScreen() {
                                 valor_pix: parseValue(registro.valorPix),
                                 valor_dinheiro: parseValue(registro.valorDinheiro),
                                 valor_moedas: parseValue(registro.valorMoedas),
-                                valor_baratao: parseValue(registro.valorBaratao),
                                 valor_encerrante: valorEncerrante,
                                 falta_caixa: temFalta ? diferencaCaixa : 0,
                                 observacoes: registro.observacoes,
@@ -421,7 +416,6 @@ export default function RegistroScreen() {
                                                 valorPix: '',
                                                 valorDinheiro: '',
                                                 valorMoedas: '',
-                                                valorBaratao: '',
                                                 observacoes: '',
                                             });
                                             setNotasAdicionadas([]);
@@ -800,31 +794,7 @@ export default function RegistroScreen() {
                     </View>
 
 
-                    {/* Baratão (Full Width styled) */}
-                    <View className="mb-6">
-                        <View className="bg-rose-50 rounded-3xl p-5 border-2 border-rose-100 flex-row items-center justify-between">
-                            <View className="flex-row items-center gap-4">
-                                <View className="p-3 bg-rose-600 rounded-2xl shadow-md">
-                                    <CircleDollarSign size={24} color="white" />
-                                </View>
-                                <View>
-                                    <Text className="text-rose-700 font-black text-lg">Baratão</Text>
-                                    <Text className="text-rose-400 text-xs">Voucher promocional</Text>
-                                </View>
-                            </View>
-                            <View className="bg-white px-4 py-2 rounded-2xl border border-rose-200 flex-row items-center">
-                                <Text className="text-rose-300 font-bold mr-1">R$</Text>
-                                <TextInput
-                                    className="text-xl font-black text-rose-700 min-w-[80px] text-right"
-                                    placeholder="0,00"
-                                    placeholderTextColor="#fecaca"
-                                    value={registro.valorBaratao}
-                                    onChangeText={(v) => handleChange('valorBaratao', v)}
-                                    keyboardType="decimal-pad"
-                                />
-                            </View>
-                        </View>
-                    </View>
+
 
                     {/* Seção de Notas/Vales */}
                     <View className="mb-4">
@@ -949,12 +919,7 @@ export default function RegistroScreen() {
                                         <Text className="text-xs font-medium text-gray-600">{formatCurrency(parseValue(registro.valorMoedas))}</Text>
                                     </View>
                                 )}
-                                {parseValue(registro.valorBaratao) > 0 && (
-                                    <View className="flex-row justify-between items-center">
-                                        <Text className="text-gray-400 text-xs">Baratão</Text>
-                                        <Text className="text-xs font-medium text-gray-600">{formatCurrency(parseValue(registro.valorBaratao))}</Text>
-                                    </View>
-                                )}
+
                             </View>
 
                             {/* Status da Diferença */}

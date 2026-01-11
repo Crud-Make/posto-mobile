@@ -75,7 +75,6 @@ export interface FechamentoFrentista {
     valor_pix: number;
     valor_nota: number;
     valor_conferido: number;
-    baratao: number;
     diferenca: number;
     observacoes: string | null;
 }
@@ -88,7 +87,6 @@ export interface SubmitClosingData {
     valor_nota: number;
     valor_pix: number;
     valor_dinheiro: number;
-    valor_baratao: number;
     valor_encerrante: number;
     falta_caixa: number;
     observacoes: string;
