@@ -1,21 +1,39 @@
 import { supabase } from '../lib/supabase';
 
+/**
+ * Interface que representa um Turno de trabalho.
+ */
 export interface Turno {
+    /** Identificador único do turno */
     id: number;
+    /** Nome do turno (ex: 'Manhã', 'Tarde', 'Noite') */
     nome: string;
+    /** Horário de início do turno (formato HH:mm:ss) */
     horario_inicio: string;
+    /** Horário de fim do turno (formato HH:mm:ss) */
     horario_fim: string;
+    /** Indica se o turno está ativo */
     ativo?: boolean | null;
 }
 
+/**
+ * Interface estendida de Turno com status de fechamento.
+ */
 export interface TurnoComStatus extends Turno {
+    /** Status do turno em relação ao fechamento (ex: 'ABERTO', 'FECHADO') */
     status?: 'ABERTO' | 'FECHADO' | 'PENDENTE';
 }
 
 /**
- * Busca turnos disponíveis
+ * Serviço para gerenciar operações relacionadas a turnos.
  */
 export const turnoService = {
+    /**
+     * Busca todos os turnos cadastrados para um posto.
+     * 
+     * @param {number} [postoId] - O ID do posto.
+     * @returns {Promise<Turno[]>} Lista de turnos ordenados por horário de início.
+     */
     async getAll(postoId?: number): Promise<Turno[]> {
         let query = supabase
             .from('Turno')
@@ -36,7 +54,11 @@ export const turnoService = {
     },
 
     /**
-     * Identifica o turno atual baseado na hora
+     * Identifica o turno atual baseado na hora do sistema.
+     * Tenta encontrar um turno que englobe a hora atual.
+     * 
+     * @param {number} [postoId] - O ID do posto.
+     * @returns {Promise<Turno | null>} O turno atual ou um fallback (Diário/Primeiro) se não encontrado.
      */
     async getCurrentTurno(postoId?: number): Promise<Turno | null> {
         console.log('[TurnoService] Identificando turno atual para posto:', postoId);

@@ -1,12 +1,13 @@
 /**
- * useUpdateChecker - Hook para gerenciar atualizações OTA do EAS Update
+ * useUpdateChecker - Hook para gerenciar atualizações OTA do EAS Update.
  * 
  * FUNCIONALIDADES:
- * 1. Verifica automaticamente por atualizações ao abrir o app
- * 2. Baixa atualizações em background
- * 3. Aplica atualizações críticas instantaneamente (Instant Reload)
- * 4. Suporta Cross-native Runtime Deployments
+ * 1. Verifica automaticamente por atualizações ao abrir o app.
+ * 2. Baixa atualizações em background.
+ * 3. Aplica atualizações críticas instantaneamente (Instant Reload).
+ * 4. Suporta Cross-native Runtime Deployments.
  * 
+ * @module useUpdateChecker
  * @version 1.4.0
  * @author Posto Providência
  */
@@ -16,7 +17,7 @@ import * as Updates from 'expo-updates';
 import { Alert, AppState, AppStateStatus } from 'react-native';
 
 /**
- * Tipos de atualização disponíveis
+ * Tipos de atualização disponíveis.
  */
 export type UpdateStatus =
     | 'checking'      // Verificando atualizações
@@ -26,25 +27,35 @@ export type UpdateStatus =
     | 'up-to-date'    // Já está na versão mais recente
     | 'error';        // Erro ao verificar/baixar
 
+/**
+ * Interface com as informações detalhadas sobre o estado da atualização.
+ */
 export interface UpdateInfo {
+    /** Status atual do processo de atualização */
     status: UpdateStatus;
+    /** Se há uma atualização disponível */
     isUpdateAvailable: boolean;
+    /** Se está baixando a atualização */
     isDownloading: boolean;
+    /** Progresso do download (0-100) - Simulado ou real se API suportar */
     downloadProgress: number;
+    /** Mensagem de erro, se houver */
     error: string | null;
+    /** Versão atual do runtime */
     currentVersion: string;
     /** Se true, aplica a atualização automaticamente sem perguntar */
     autoReload: boolean;
 }
 
 /**
- * Hook principal para gerenciamento de atualizações OTA
+ * Hook principal para gerenciamento de atualizações OTA.
  * 
- * @param options Configurações do hook
- * @param options.checkOnMount Se deve verificar atualizações ao montar (default: true)
- * @param options.checkOnForeground Se deve verificar quando o app volta ao foreground (default: true)
- * @param options.autoDownload Se deve baixar automaticamente quando disponível (default: true)
- * @param options.criticalUpdate Se true, aplica instantaneamente sem perguntar (default: false)
+ * @param {object} [options] - Configurações do hook.
+ * @param {boolean} [options.checkOnMount=true] - Se deve verificar atualizações ao montar.
+ * @param {boolean} [options.checkOnForeground=true] - Se deve verificar quando o app volta ao foreground.
+ * @param {boolean} [options.autoDownload=true] - Se deve baixar automaticamente quando disponível.
+ * @param {boolean} [options.criticalUpdate=false] - Se true, aplica instantaneamente sem perguntar.
+ * @returns {UpdateInfo & { checkForUpdate: () => Promise<boolean>, downloadUpdate: () => Promise<boolean>, applyUpdate: () => Promise<void> }} O estado e funções de controle.
  */
 export function useUpdateChecker(options?: {
     checkOnMount?: boolean;
@@ -70,8 +81,10 @@ export function useUpdateChecker(options?: {
     });
 
     /**
-     * Verifica se há atualizações disponíveis
-     * Retorna true se encontrou uma atualização
+     * Verifica se há atualizações disponíveis.
+     * Atualiza o estado com o resultado da verificação.
+     * 
+     * @returns {Promise<boolean>} True se encontrou uma atualização.
      */
     const checkForUpdate = useCallback(async (): Promise<boolean> => {
         // Em desenvolvimento, não verifica atualizações
@@ -121,7 +134,9 @@ export function useUpdateChecker(options?: {
     }, [autoDownload]);
 
     /**
-     * Baixa a atualização disponível
+     * Baixa a atualização disponível.
+     * 
+     * @returns {Promise<boolean>} True se baixou com sucesso.
      */
     const downloadUpdate = useCallback(async (): Promise<boolean> => {
         if (__DEV__) return false;
@@ -169,7 +184,7 @@ export function useUpdateChecker(options?: {
     }, [criticalUpdate]);
 
     /**
-     * Aplica a atualização e reinicia o app (Instant Reload)
+     * Aplica a atualização e reinicia o app (Instant Reload).
      */
     const applyUpdate = useCallback(async () => {
         if (__DEV__) {
@@ -192,54 +207,36 @@ export function useUpdateChecker(options?: {
     }, []);
 
     /**
-     * Mostra um alerta amigável perguntando se o usuário quer atualizar
+     * Mostra um alerta amigável perguntando se o usuário quer atualizar.
      */
     const promptForUpdate = useCallback(() => {
         Alert.alert(
             '🆕 Atualização Disponível',
             'Uma nova versão do app está pronta. Deseja atualizar agora?\n\nO app será reiniciado automaticamente.',
             [
-                {
-                    text: 'Mais tarde',
-                    style: 'cancel',
-                    onPress: () => console.log('[OTA] Usuário adiou a atualização')
-                },
-                {
-                    text: 'Atualizar Agora',
-                    style: 'default',
-                    onPress: async () => {
-                        if (updateInfo.status === 'ready') {
-                            await applyUpdate();
-                        } else {
-                            await downloadUpdate();
-                            await applyUpdate();
-                        }
-                    }
-                }
-            ],
-            { cancelable: false }
+                { text: 'Agora não', style: 'cancel' },
+                { text: 'Atualizar', onPress: () => applyUpdate() }
+            ]
         );
-    }, [updateInfo.status, downloadUpdate, applyUpdate]);
+    }, [applyUpdate]);
 
-    // Verificar atualizações ao montar o componente
+    // Setup inicial
     useEffect(() => {
         if (checkOnMount) {
             checkForUpdate();
         }
     }, [checkOnMount, checkForUpdate]);
 
-    // Verificar atualizações quando o app volta ao foreground
+    // Listener para quando o app volta ao foreground
     useEffect(() => {
         if (!checkOnForeground) return;
 
-        const handleAppStateChange = (nextAppState: AppStateStatus) => {
+        // [18/01 18:10] Tipagem de nextAppState para usar AppStateStatus
+        const subscription = AppState.addEventListener('change', (nextAppState: AppStateStatus) => {
             if (nextAppState === 'active') {
-                console.log('[OTA] App voltou ao foreground - verificando atualizações...');
                 checkForUpdate();
             }
-        };
-
-        const subscription = AppState.addEventListener('change', handleAppStateChange);
+        });
 
         return () => {
             subscription.remove();
@@ -248,6 +245,7 @@ export function useUpdateChecker(options?: {
 
     return {
         ...updateInfo,
+        // [18/01 18:10] Reexposto checkingUpdate para compatibilidade com PerfilScreen
         checkingUpdate: updateInfo.status === 'checking',
         checkForUpdate,
         downloadUpdate,

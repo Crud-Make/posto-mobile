@@ -14,19 +14,40 @@ import {
     Gauge
 } from 'lucide-react-native';
 
+/**
+ * Tipos de filtros disponíveis para o histórico.
+ */
 type HistoricoFiltro = 'todos' | 'ok' | 'divergente';
 
+/**
+ * Interface que representa um item do histórico de fechamento.
+ */
 interface HistoricoItem {
+    /** ID único do fechamento */
     id: number;
+    /** Data do fechamento */
     data: string;
+    /** Identificador do turno */
     turno: string;
+    /** Valor total informado pelo frentista */
     totalInformado: number;
+    /** Valor do encerrante (medidor) */
     encerrante: number;
+    /** Diferença entre informado e encerrante */
     diferenca: number;
+    /** Status do fechamento (ok ou com divergência) */
     status: 'ok' | 'divergente';
+    /** Observações adicionais */
     observacoes?: string;
 }
 
+/**
+ * Tela de Histórico de Fechamentos.
+ * Exibe a lista de fechamentos realizados pelo frentista, com filtros e resumo.
+ * 
+ * @component
+ * @returns {JSX.Element} O componente da tela de histórico.
+ */
 export default function HistoricoScreen() {
     const insets = useSafeAreaInsets();
     const { postoAtivoId } = usePosto();
@@ -35,6 +56,10 @@ export default function HistoricoScreen() {
 	const [refreshing, setRefreshing] = useState(false);
 	const [filtroAtivo, setFiltroAtivo] = useState<HistoricoFiltro>('todos');
 
+    /**
+     * Carrega o histórico de fechamentos do frentista para o posto ativo.
+     * Busca o usuário logado, identifica o frentista e consulta o serviço de fechamento.
+     */
     const loadHistorico = async () => {
         if (!postoAtivoId) return;
         try {
@@ -53,16 +78,27 @@ export default function HistoricoScreen() {
         }
     };
 
+    /**
+     * Efeito para carregar o histórico quando o posto ativo mudar.
+     */
     useEffect(() => {
         loadHistorico();
     }, [postoAtivoId]);
 
+    /**
+     * Callback para atualização da lista via pull-to-refresh.
+     */
     const onRefresh = useCallback(async () => {
         setRefreshing(true);
         await loadHistorico();
         setRefreshing(false);
     }, []);
 
+    /**
+     * Formata um valor numérico para o formato de moeda BRL.
+     * @param {number} value - O valor a ser formatado.
+     * @returns {string} O valor formatado em reais (R$).
+     */
     const formatCurrency = (value: number): string => {
         return value.toLocaleString('pt-BR', {
             style: 'currency',
@@ -70,6 +106,11 @@ export default function HistoricoScreen() {
         });
     };
 
+    /**
+     * Formata uma string de data ISO para o formato local (pt-BR).
+     * @param {string} dateStr - A string de data ISO.
+     * @returns {string} A data formatada.
+     */
     const formatDate = (dateStr: string): string => {
         if (!dateStr) return 'N/A';
         const date = new Date(dateStr);
@@ -77,6 +118,9 @@ export default function HistoricoScreen() {
         return date.toLocaleDateString('pt-BR');
     };
 
+    /**
+     * Filtra o histórico com base no filtro ativo selecionado.
+     */
     const historicoFiltrado = historico.filter(item => {
         if (filtroAtivo === 'todos') return true;
         return item.status === filtroAtivo;

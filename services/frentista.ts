@@ -1,21 +1,39 @@
 import { supabase } from '../lib/supabase';
 
+/**
+ * Interface que representa um frentista no sistema.
+ */
 export interface Frentista {
+    /** Identificador único do frentista */
     id: number;
+    /** Nome completo do frentista */
     nome: string;
+    /** CPF do frentista */
     cpf: string | null;
+    /** Telefone de contato */
     telefone: string | null;
+    /** Data de admissão */
     data_admissao: string | null;
+    /** Indica se o frentista está ativo */
     ativo: boolean;
+    /** ID do usuário vinculado (UUID do Supabase Auth) */
     user_id: string | null;
+    /** ID do turno preferencial */
     turno_id?: number | null;
+    /** ID do posto ao qual pertence */
     posto_id: number;
 }
 
 /**
- * Busca o frentista associado ao usuário logado
+ * Serviço para gerenciar operações relacionadas a frentistas.
  */
 export const frentistaService = {
+    /**
+     * Busca o frentista associado a um usuário logado (pelo ID do Auth).
+     * 
+     * @param {string} userId - UUID do usuário no Supabase Auth.
+     * @returns {Promise<Frentista | null>} O frentista encontrado ou null.
+     */
     async getByUserId(userId: string): Promise<Frentista | null> {
         const { data, error } = await supabase
             .from('Frentista')
@@ -32,6 +50,13 @@ export const frentistaService = {
         return data;
     },
 
+    /**
+     * Atualiza os dados de um frentista.
+     * 
+     * @param {number} id - ID do frentista.
+     * @param {Partial<Frentista>} updates - Campos a serem atualizados.
+     * @returns {Promise<Frentista | null>} O frentista atualizado ou null em caso de erro.
+     */
     async update(id: number, updates: Partial<Frentista>): Promise<Frentista | null> {
         const { data, error } = await supabase
             .from('Frentista')
@@ -46,6 +71,13 @@ export const frentistaService = {
         }
         return data;
     },
+
+    /**
+     * Busca todos os frentistas ativos de um posto.
+     * 
+     * @param {number} postoId - ID do posto.
+     * @returns {Promise<Frentista[]>} Lista de frentistas ativos ordenados por nome.
+     */
     async getAllByPosto(postoId: number): Promise<Frentista[]> {
         const { data, error } = await supabase
             .from('Frentista')

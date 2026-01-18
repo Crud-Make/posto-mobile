@@ -1,4 +1,5 @@
-import { View, Text, TextInput, TouchableOpacity, ScrollView, Alert, ActivityIndicator, KeyboardAvoidingView, Platform, Modal, FlatList } from 'react-native';
+// [18/01 17:50] Refatoração completa: extração de componentes e JSDoc
+import { View, Text, TouchableOpacity, ScrollView, Alert, ActivityIndicator, KeyboardAvoidingView, Platform, Modal } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useState, useEffect } from 'react';
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
@@ -8,62 +9,21 @@ import { turnoService, type Turno } from '../../services/turno';
 import { frentistaService, type Frentista } from '../../services/frentista';
 import { clienteService, type Cliente } from '../../services/cliente';
 import { usePosto } from '../../lib/PostoContext';
-import {
-	CreditCard,
-	Receipt,
-	Smartphone,
-	Banknote,
-	AlertTriangle,
-	Check,
-	Send,
-	Calculator,
-	ChevronDown,
-	Clock,
-	User,
-	Gauge,
-	Plus,
-	Trash2,
-	X,
-	Search,
-	Coins,
-	Ban,
-	Calendar
-} from 'lucide-react-native';
-import type { LucideIcon } from 'lucide-react-native';
+import { Send, X } from 'lucide-react-native';
 
-// Tipos
-interface FormaPagamento {
-    id: string;
-    label: string;
-	icon: LucideIcon;
-    color: string;
-    bgColor: string;
-}
+// Utilitários e Tipos Compartilhados
+import { formatCurrency, parseValue, formatCurrencyInput, formatDateDisplay, formatDateForDB } from '../../lib/utils';
+import type { RegistroTurno, NotaItem } from '../../components/registro/types';
 
-interface NotaItem {
-    cliente_id: number;
-    cliente_nome: string;
-    valor: string; // formato exibição
-    valor_number: number;
-}
-
-interface RegistroTurno {
-    valorEncerrante: string;
-    valorCartaoDebito: string;
-    valorCartaoCredito: string;
-    valorPix: string;
-    valorDinheiro: string;
-    valorMoedas: string;
-    observacoes: string;
-}
-
-const FORMAS_PAGAMENTO: FormaPagamento[] = [
-    { id: 'debito', label: 'Débito', icon: CreditCard, color: '#2563eb', bgColor: '#eff6ff' },
-    { id: 'credito', label: 'Crédito', icon: CreditCard, color: '#7c3aed', bgColor: '#f5f3ff' },
-    { id: 'nota', label: 'Nota/Vale', icon: Receipt, color: '#0891b2', bgColor: '#ecfeff' },
-    { id: 'pix', label: 'PIX', icon: Smartphone, color: '#059669', bgColor: '#ecfdf5' },
-    { id: 'dinheiro', label: 'Dinheiro', icon: Banknote, color: '#16a34a', bgColor: '#f0fdf4' },
-];
+// Novos Componentes Extraídos
+import { HeaderCard } from '../../components/registro/HeaderCard';
+import { DataFechamentoCard } from '../../components/registro/DataFechamentoCard';
+import { EncerranteCard } from '../../components/registro/EncerranteCard';
+import { FormasPagamentoList } from '../../components/registro/FormasPagamentoList';
+import { NotasListCard } from '../../components/registro/NotasListCard';
+import { ResumoCard } from '../../components/registro/ResumoCard';
+import { NotaModal } from '../../components/registro/NotaModal';
+import { FrentistaModal } from '../../components/registro/FrentistaModal';
 
 export default function RegistroScreen() {
     const insets = useSafeAreaInsets();
@@ -75,7 +35,6 @@ export default function RegistroScreen() {
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
     const [userName, setUserName] = useState('Frentista');
-    const [turnoAtual, setTurnoAtual] = useState('Diário'); // Modo diário automático
     const [turnoId, setTurnoId] = useState<number | null>(null);
     const [frentistas, setFrentistas] = useState<Frentista[]>([]);
     const [frentistaId, setFrentistaId] = useState<number | null>(null);
@@ -94,55 +53,19 @@ export default function RegistroScreen() {
 
     const [notasAdicionadas, setNotasAdicionadas] = useState<NotaItem[]>([]);
     const [modalNotaVisible, setModalNotaVisible] = useState(false);
-    // modalTurnoVisible REMOVIDO - Turno agora é automático (v1.4.0)
     const [selectedCliente, setSelectedCliente] = useState<Cliente | null>(null);
     const [valorNotaTemp, setValorNotaTemp] = useState('');
-    const [buscaCliente, setBuscaCliente] = useState(''); // Novo estado para busca
+    const [buscaCliente, setBuscaCliente] = useState('');
 
     // Estados para Data de Fechamento
     const [dataFechamento, setDataFechamento] = useState<Date>(new Date());
     const [showDatePicker, setShowDatePicker] = useState(false);
     const [modalDataVisible, setModalDataVisible] = useState(false);
 
-    // Formatação de Moeda
-    const formatCurrency = (value: number): string => {
-        return value.toLocaleString('pt-BR', {
-            style: 'currency',
-            currency: 'BRL'
-        });
-    };
-
-    const parseValue = (value: string): number => {
-        if (!value) return 0;
-        const cleanStr = value.replace(/[^\d,]/g, '').replace(',', '.');
-        const parsed = parseFloat(cleanStr);
-        return isNaN(parsed) ? 0 : parsed;
-    };
-
-    /**
-     * Formata a data para exibição no formato brasileiro (DD/MM/YYYY)
-     */
-    const formatDateDisplay = (date: Date): string => {
-        const day = String(date.getDate()).padStart(2, '0');
-        const month = String(date.getMonth() + 1).padStart(2, '0');
-        const year = date.getFullYear();
-        return `${day}/${month}/${year}`;
-    };
-
-    /**
-     * Formata a data para envio ao banco (YYYY-MM-DD)
-     */
-    const formatDateForDB = (date: Date): string => {
-        const year = date.getFullYear();
-        const month = String(date.getMonth() + 1).padStart(2, '0');
-        const day = String(date.getDate()).padStart(2, '0');
-        return `${year}-${month}-${day}`;
-    };
-
     /**
      * Handler para mudança de data no DatePicker
      */
-	const handleDateChange = (event: DateTimePickerEvent, selectedDate?: Date) => {
+    const handleDateChange = (event: DateTimePickerEvent, selectedDate?: Date) => {
         setShowDatePicker(Platform.OS === 'ios'); // No iOS mantém aberto, no Android fecha
         if (selectedDate) {
             setDataFechamento(selectedDate);
@@ -161,16 +84,6 @@ export default function RegistroScreen() {
             observacoes: '',
         });
         setNotasAdicionadas([]);
-    };
-
-    const formatCurrencyInput = (value: string) => {
-        const onlyNumbers = value.replace(/\D/g, '');
-        if (onlyNumbers === '') return '';
-        const amount = parseInt(onlyNumbers) / 100;
-        return amount.toLocaleString('pt-BR', {
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2
-        });
     };
 
     const handleChange = (field: keyof RegistroTurno, value: string) => {
@@ -228,9 +141,6 @@ export default function RegistroScreen() {
         /**
          * loadAllData - Carrega todos os dados necessários para a tela
          * REFATORADO v1.4.0: Modo Universal sem verificação de admin
-         * - Turno é determinado automaticamente (getCurrentTurno)
-         * - Não há mais verificação de login/papel do usuário
-         * - Todos os frentistas são carregados para seleção
          */
         async function loadAllData() {
             if (!postoAtivoId) return;
@@ -344,7 +254,6 @@ export default function RegistroScreen() {
                 const retryTurno = await turnoService.getCurrentTurno(postoAtivoId!);
                 if (retryTurno) {
                     setTurnoId(retryTurno.id);
-                    // Prossiga se recuperou
                 } else {
                     Alert.alert(
                         'Erro de Configuração',
@@ -402,7 +311,6 @@ export default function RegistroScreen() {
                                 }))
                             };
 
-                            // Enviar para o Supabase
                             const result = await submitMobileClosing(closingData);
 
                             if (result.success) {
@@ -444,43 +352,6 @@ export default function RegistroScreen() {
         );
     };
 
-    const renderInputField = (
-        forma: FormaPagamento,
-        value: string,
-        field: keyof RegistroTurno
-    ) => {
-        const Icon = forma.icon;
-        return (
-            <View key={forma.id} className="mb-4">
-                <View
-                    className="flex-row items-center bg-white rounded-2xl border-2 border-gray-100 overflow-hidden"
-                    style={{ shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 }}
-                >
-                    <View
-                        className="p-4 items-center justify-center"
-                        style={{ backgroundColor: forma.bgColor }}
-                    >
-                        <Icon size={24} color={forma.color} />
-                    </View>
-                    <View className="flex-1 px-4">
-                        <Text className="text-xs text-gray-400 font-medium">{forma.label}</Text>
-                        <View className="flex-row items-center">
-                            <Text className="text-gray-500 text-lg font-medium mr-1">R$</Text>
-                            <TextInput
-                                className="flex-1 text-xl font-bold text-gray-800 py-2"
-                                placeholder="0,00"
-                                placeholderTextColor="#d1d5db"
-                                value={value}
-                                onChangeText={(text) => handleChange(field, text)}
-                                keyboardType="decimal-pad"
-                            />
-                        </View>
-                    </View>
-                </View>
-            </View>
-        );
-    };
-
     return (
         <KeyboardAvoidingView
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -491,482 +362,66 @@ export default function RegistroScreen() {
                 contentContainerStyle={{ paddingBottom: insets.bottom + 180 }}
                 showsVerticalScrollIndicator={false}
             >
-                {/* Header Card - Modo Universal sem Login
-                 * ALTERAÇÃO v1.4.0: Dropdown de frentistas SEMPRE visível
-                 * Qualquer pessoa pode selecionar qual frentista está registrando
-                 * Turno é determinado automaticamente (igual ao dashboard web)
-                 */}
-                <View
-                    className="mx-4 mt-4 p-5 bg-white rounded-3xl border border-gray-100"
-                    style={{ shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.08, shadowRadius: 12, elevation: 4 }}
-                >
-                    <View className="flex-row items-center justify-between">
-                        <View className="flex-row items-center gap-3">
-                            <View className="w-12 h-12 bg-primary-100 rounded-full items-center justify-center">
-                                <User size={24} color="#b91c1c" />
-                            </View>
-                            <View>
-                                {/* Dropdown SEMPRE ativo - Modo Plataforma Universal */}
-                                <TouchableOpacity
-                                    onPress={() => setModalFrentistaVisible(true)}
-                                    className="flex-row items-center gap-1"
-                                    activeOpacity={0.7}
-                                >
-                                    <Text className="text-lg font-bold text-gray-800">
-                                        {frentistaId ? `Olá, ${userName}!` : 'Selecionar Frentista'}
-                                    </Text>
-                                    <ChevronDown size={16} color="#4b5563" />
-                                </TouchableOpacity>
-                                <Text className="text-sm text-gray-500">{postoAtivo?.nome || 'Posto Providência'}</Text>
-                            </View>
-                        </View>
-                        {/* Badge de Modo Diário (apenas informativo, não clicável) */}
-                        <View className="bg-gray-100 px-3 py-1.5 rounded-full">
-                            <Text className="text-gray-600 font-bold text-xs">Diário</Text>
-                        </View>
-                    </View>
-                </View>
+                <HeaderCard
+                    frentistaId={frentistaId}
+                    userName={userName}
+                    postoNome={postoAtivo?.nome || 'Posto Providência'}
+                    onPressSelect={() => setModalFrentistaVisible(true)}
+                />
 
+                <DataFechamentoCard
+                    data={dataFechamento}
+                    onPressChange={() => {
+                        if (Platform.OS === 'android') {
+                            setShowDatePicker(true);
+                        } else {
+                            setModalDataVisible(true);
+                        }
+                    }}
+                />
 
-                {/* Card de Seleção de Data de Fechamento */}
-                <View
-                    className="mx-4 mt-3 p-4 bg-white rounded-2xl border border-gray-100"
-                    style={{ shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 }}
-                >
-                    <View className="flex-row items-center justify-between">
-                        <View className="flex-row items-center gap-3">
-                            <View className="w-10 h-10 bg-blue-100 rounded-full items-center justify-center">
-                                <Calendar size={20} color="#2563eb" />
-                            </View>
-                            <View>
-                                <Text className="text-xs text-gray-500 font-medium uppercase tracking-wider">Data do Fechamento</Text>
-                                <Text className="text-base font-bold text-gray-800">{formatDateDisplay(dataFechamento)}</Text>
-                            </View>
-                        </View>
-                        <TouchableOpacity
-                            onPress={() => {
-                                if (Platform.OS === 'android') {
-                                    setShowDatePicker(true);
-                                } else {
-                                    setModalDataVisible(true);
-                                }
-                            }}
-                            className="bg-blue-600 px-4 py-2 rounded-xl"
-                            activeOpacity={0.7}
-                        >
-                            <Text className="text-white font-bold text-sm">Alterar</Text>
-                        </TouchableOpacity>
-                    </View>
-                </View>
-
-                {/* Modal de Seleção de Turno - REMOVIDO em v1.4.0
-                 * Turno agora é determinado automaticamente pela hora do dia,
-                 * igual ao comportamento do dashboard web (Modo Diário).
-                 */}
-
-                {/* Modal de Seleção de Frentista (Modo Dispositivo Compartilhado) */}
-                <Modal
+                <FrentistaModal
                     visible={modalFrentistaVisible}
-                    transparent={true}
-                    animationType="slide"
-                    onRequestClose={() => setModalFrentistaVisible(false)}
-                >
-                    <View className="flex-1 bg-black/60 justify-end">
-                        <TouchableOpacity
-                            className="absolute inset-0"
-                            onPress={() => setModalFrentistaVisible(false)}
-                        />
-                        <View className="bg-white rounded-t-[32px] shadow-2xl" style={{ maxHeight: '60%' }}>
-                            {/* Header */}
-                            <View className="bg-primary-700 p-5 rounded-t-[32px] flex-row justify-between items-center">
-                                <View>
-                                    <Text className="text-white font-bold text-xl">Quem está trabalhando?</Text>
-                                    <Text className="text-primary-200 text-sm mt-0.5">{frentistas.length} frentistas ativos</Text>
-                                </View>
-                                <TouchableOpacity
-                                    onPress={() => setModalFrentistaVisible(false)}
-                                    className="bg-white/20 p-2 rounded-full"
-                                >
-                                    <X size={22} color="white" />
-                                </TouchableOpacity>
-                            </View>
+                    onClose={() => setModalFrentistaVisible(false)}
+                    frentistas={frentistas}
+                    frentistaId={frentistaId}
+                    frentistasQueFecharam={frentistasQueFecharam}
+                    onSelect={(id, nome) => {
+                        if (id !== frentistaId) resetFormulario();
+                        setFrentistaId(id);
+                        setUserName(nome);
+                        setModalFrentistaVisible(false);
+                    }}
+                />
 
-                            {/* Lista de Frentistas */}
-                            <FlatList
-                                data={frentistas}
-                                keyExtractor={(item) => item.id.toString()}
-                                contentContainerStyle={{ paddingVertical: 8 }}
-                                renderItem={({ item }) => {
-                                    const isSelected = item.id === frentistaId;
-                                    const jaFechou = frentistasQueFecharam.includes(item.id);
-                                    const inicial = item.nome.charAt(0).toUpperCase();
-                                    return (
-                                        <TouchableOpacity
-                                            className={`mx-4 my-1.5 p-4 rounded-2xl flex-row justify-between items-center ${isSelected ? 'bg-primary-50 border-2 border-primary-200' : 'bg-gray-50'}`}
-                                            onPress={() => {
-                                                // Se trocou de frentista, limpa o formulário
-                                                if (item.id !== frentistaId) {
-                                                    resetFormulario();
-                                                }
-                                                setFrentistaId(item.id);
-                                                setUserName(item.nome);
-                                                setModalFrentistaVisible(false);
-                                            }}
-                                            activeOpacity={0.7}
-                                        >
-                                            <View className="flex-row items-center gap-4">
-                                                {/* Avatar com Inicial */}
-                                                <View className={`w-12 h-12 rounded-full items-center justify-center ${isSelected ? 'bg-primary-700' : 'bg-gray-300'}`}>
-                                                    <Text className={`text-lg font-bold ${isSelected ? 'text-white' : 'text-gray-600'}`}>
-                                                        {inicial}
-                                                    </Text>
-                                                </View>
-                                                <View>
-                                                    <Text className={`text-base font-bold ${isSelected ? 'text-primary-700' : 'text-gray-800'}`}>
-                                                        {item.nome}
-                                                    </Text>
-                                                    <Text className="text-gray-400 text-xs">
-                                                        {jaFechou ? 'Já fechou o turno' : 'Toque para selecionar'}
-                                                    </Text>
-                                                </View>
-                                            </View>
-                                            {isSelected && (
-                                                <View className="bg-primary-700 w-7 h-7 rounded-full items-center justify-center">
-                                                    <Check size={16} color="white" strokeWidth={3} />
-                                                </View>
-                                            )}
-                                            {!isSelected && jaFechou && (
-                                                <View className="bg-green-500 w-7 h-7 rounded-full items-center justify-center">
-                                                    <Check size={16} color="white" strokeWidth={3} />
-                                                </View>
-                                            )}
-                                        </TouchableOpacity>
-                                    );
-                                }}
-                            />
-                        </View>
-                    </View>
-                </Modal>
+                <EncerranteCard
+                    value={registro.valorEncerrante}
+                    onChangeText={(text) => handleChange('valorEncerrante', text)}
+                />
 
-                {/* Seção do Encerrante (Destaque Principal) */}
-                <View className="px-4 mt-6">
-                    <View
-                        className="bg-indigo-600 rounded-[32px] p-6 shadow-xl"
-                        style={{ elevation: 8, shadowColor: '#4f46e5', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.3, shadowRadius: 20 }}
-                    >
-                        <View className="flex-row items-center gap-3 mb-4">
-                            <View className="w-10 h-10 bg-white/20 rounded-full items-center justify-center border border-white/30">
-                                <Gauge size={22} color="white" />
-                            </View>
-                            <View>
-                                <Text className="text-indigo-100 text-xs font-bold uppercase tracking-widest">Conferência de Vendas</Text>
-                                <Text className="text-white text-lg font-black">Total Vendido (R$)</Text>
-                            </View>
-                        </View>
+                <FormasPagamentoList
+                    registro={registro}
+                    onChange={handleChange}
+                />
 
-                        <View className="bg-white/10 rounded-2xl p-4 border border-white/20">
-                            <View className="flex-row items-center">
-                                <Text className="text-indigo-200 text-2xl font-bold mr-2">R$</Text>
-                                <TextInput
-                                    className="flex-1 text-3xl font-black text-white py-1"
-                                    placeholder="0,00"
-                                    placeholderTextColor="rgba(255,255,255,0.3)"
-                                    value={registro.valorEncerrante}
-                                    onChangeText={(text) => handleChange('valorEncerrante', text)}
-                                    keyboardType="decimal-pad"
-                                />
-                            </View>
-                        </View>
-                    </View>
-                </View>
+                <NotasListCard
+                    notasAdicionadas={notasAdicionadas}
+                    totalNotas={totalNotas}
+                    onAddPress={() => setModalNotaVisible(true)}
+                    onRemoveNota={handleRemoveNota}
+                />
 
-                {/* Seção de Valores (Grid 2x2) */}
-                <View className="px-4 mt-8">
-                    <Text className="text-xl font-black text-gray-800 mb-1">💰 Recebimentos</Text>
-                    <Text className="text-sm text-gray-500 mb-5">Toque nos campos para preencher os valores</Text>
-
-                    <View className="flex-row flex-wrap -mx-2">
-                        {/* Cartão Débito */}
-                        <View className="w-1/2 px-2 mb-4">
-                            <View className="bg-white rounded-3xl p-4 border-2 border-blue-50 shadow-sm">
-                                <View className="flex-row items-center gap-2 mb-2">
-                                    <View className="p-1.5 bg-blue-100 rounded-lg">
-                                        <CreditCard size={16} color="#2563eb" />
-                                    </View>
-                                    <Text className="text-[10px] font-black text-blue-600 uppercase">Débito</Text>
-                                </View>
-                                <View className="flex-row items-center border-b border-gray-100 pb-1">
-                                    <Text className="text-gray-400 font-bold mr-1">R$</Text>
-                                    <TextInput
-                                        className="flex-1 text-lg font-black text-gray-800 p-0"
-                                        placeholder="0,00"
-                                        value={registro.valorCartaoDebito}
-                                        onChangeText={(v) => handleChange('valorCartaoDebito', v)}
-                                        keyboardType="decimal-pad"
-                                    />
-                                </View>
-                            </View>
-                        </View>
-
-                        {/* Cartão Crédito */}
-                        <View className="w-1/2 px-2 mb-4">
-                            <View className="bg-white rounded-3xl p-4 border-2 border-indigo-50 shadow-sm">
-                                <View className="flex-row items-center gap-2 mb-2">
-                                    <View className="p-1.5 bg-indigo-100 rounded-lg">
-                                        <CreditCard size={16} color="#4f46e5" />
-                                    </View>
-                                    <Text className="text-[10px] font-black text-indigo-600 uppercase">Crédito</Text>
-                                </View>
-                                <View className="flex-row items-center border-b border-gray-100 pb-1">
-                                    <Text className="text-gray-400 font-bold mr-1">R$</Text>
-                                    <TextInput
-                                        className="flex-1 text-lg font-black text-gray-800 p-0"
-                                        placeholder="0,00"
-                                        value={registro.valorCartaoCredito}
-                                        onChangeText={(v) => handleChange('valorCartaoCredito', v)}
-                                        keyboardType="decimal-pad"
-                                    />
-                                </View>
-                            </View>
-                        </View>
-
-                        {/* PIX */}
-                        <View className="w-1/2 px-2 mb-4">
-                            <View className="bg-white rounded-3xl p-4 border-2 border-teal-50 shadow-sm">
-                                <View className="flex-row items-center gap-2 mb-2">
-                                    <View className="p-1.5 bg-teal-100 rounded-lg">
-                                        <Smartphone size={16} color="#0d9488" />
-                                    </View>
-                                    <Text className="text-[10px] font-black text-teal-600 uppercase">PIX</Text>
-                                </View>
-                                <View className="flex-row items-center border-b border-gray-100 pb-1">
-                                    <Text className="text-gray-400 font-bold mr-1">R$</Text>
-                                    <TextInput
-                                        className="flex-1 text-lg font-black text-gray-800 p-0"
-                                        placeholder="0,00"
-                                        value={registro.valorPix}
-                                        onChangeText={(v) => handleChange('valorPix', v)}
-                                        keyboardType="decimal-pad"
-                                    />
-                                </View>
-                            </View>
-                        </View>
-
-                        {/* Dinheiro */}
-                        <View className="w-1/2 px-2 mb-4">
-                            <View className="bg-white rounded-3xl p-4 border-2 border-emerald-50 shadow-sm">
-                                <View className="flex-row items-center gap-2 mb-2">
-                                    <View className="p-1.5 bg-emerald-100 rounded-lg">
-                                        <Banknote size={16} color="#059669" />
-                                    </View>
-                                    <Text className="text-[10px] font-black text-emerald-600 uppercase">Dinheiro</Text>
-                                </View>
-                                <View className="flex-row items-center border-b border-gray-100 pb-1">
-                                    <Text className="text-gray-400 font-bold mr-1">R$</Text>
-                                    <TextInput
-                                        className="flex-1 text-lg font-black text-gray-800 p-0"
-                                        placeholder="0,00"
-                                        value={registro.valorDinheiro}
-                                        onChangeText={(v) => handleChange('valorDinheiro', v)}
-                                        keyboardType="decimal-pad"
-                                    />
-                                </View>
-                            </View>
-                        </View>
-
-                        {/* Moedas */}
-                        <View className="w-1/2 px-2 mb-4">
-                            <View className="bg-white rounded-3xl p-4 border-2 border-amber-50 shadow-sm">
-                                <View className="flex-row items-center gap-2 mb-2">
-                                    <View className="p-1.5 bg-amber-100 rounded-lg">
-                                        <Coins size={16} color="#d97706" />
-                                    </View>
-                                    <Text className="text-[10px] font-black text-amber-600 uppercase">Moedas</Text>
-                                </View>
-                                <View className="flex-row items-center border-b border-gray-100 pb-1">
-                                    <Text className="text-gray-400 font-bold mr-1">R$</Text>
-                                    <TextInput
-                                        className="flex-1 text-lg font-black text-gray-800 p-0"
-                                        placeholder="0,00"
-                                        value={registro.valorMoedas}
-                                        onChangeText={(v) => handleChange('valorMoedas', v)}
-                                        keyboardType="decimal-pad"
-                                    />
-                                </View>
-                            </View>
-                        </View>
-                    </View>
-
-
-
-
-                    {/* Seção de Notas/Vales */}
-                    <View className="mb-4">
-                        <View className="flex-row items-center justify-between mb-3 px-1">
-                            <View>
-                                <Text className="text-lg font-black text-gray-800">📑 Notas / Vales</Text>
-                                <Text className="text-xs text-gray-400">Vendas faturadas a prazo</Text>
-                            </View>
-                            <TouchableOpacity
-                                className="bg-cyan-600 px-4 py-2.5 rounded-2xl flex-row items-center gap-2 shadow-sm"
-                                onPress={() => setModalNotaVisible(true)}
-                            >
-                                <Plus size={16} color="white" strokeWidth={3} />
-                                <Text className="text-white font-black text-sm uppercase">Adicionar</Text>
-                            </TouchableOpacity>
-                        </View>
-
-                        {notasAdicionadas.length === 0 ? (
-                            <View className="bg-gray-100 rounded-[32px] p-10 border-2 border-gray-200 border-dashed items-center justify-center">
-                                <View className="w-16 h-16 bg-gray-200 rounded-full items-center justify-center mb-4">
-                                    <Receipt size={32} color="#9ca3af" />
-                                </View>
-                                <Text className="text-gray-400 text-sm font-bold text-center">Nenhuma nota pendente</Text>
-                                <Text className="text-gray-300 text-[10px] uppercase mt-1 tracking-tighter">Toque em adicionar para registrar</Text>
-                            </View>
-                        ) : (
-                            <View
-                                className="bg-white rounded-[32px] border-2 border-cyan-100 overflow-hidden shadow-sm"
-                                style={{ elevation: 3 }}
-                            >
-                                {notasAdicionadas.map((item, index) => (
-                                    <View key={index} className={`flex-row items-center justify-between p-5 ${index !== notasAdicionadas.length - 1 ? 'border-b border-gray-50' : ''}`}>
-                                        <View className="flex-1 pr-2">
-                                            <Text className="text-gray-800 font-black text-base" numberOfLines={1}>{item.cliente_nome}</Text>
-                                            <Text className="text-gray-400 text-[10px] uppercase font-bold tracking-widest">Venda faturada</Text>
-                                        </View>
-                                        <View className="flex-row items-center gap-4">
-                                            <View className="bg-cyan-50 px-3 py-1.5 rounded-xl border border-cyan-100">
-                                                <Text className="font-black text-cyan-700 text-base">{formatCurrency(item.valor_number)}</Text>
-                                            </View>
-                                            <TouchableOpacity
-                                                onPress={() => handleRemoveNota(index)}
-                                                className="bg-red-50 p-2 rounded-xl border border-red-100"
-                                            >
-                                                <Trash2 size={18} color="#ef4444" />
-                                            </TouchableOpacity>
-                                        </View>
-                                    </View>
-                                ))}
-                                <View className="bg-cyan-600 p-5 flex-row justify-between items-center">
-                                    <Text className="text-white font-black text-sm uppercase tracking-widest">Total em Notas</Text>
-                                    <Text className="text-white font-black text-2xl">{formatCurrency(totalNotas)}</Text>
-                                </View>
-                            </View>
-                        )}
-                    </View>
-                </View>
-
-
-
-                {/* Card de Resumo */}
-                <View className="px-4 mt-6">
-                    <View
-                        className="bg-white rounded-3xl border border-gray-100 overflow-hidden"
-                        style={{ shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.08, shadowRadius: 12, elevation: 4 }}
-                    >
-                        <View className="bg-gray-50 px-5 py-4 border-b border-gray-100">
-                            <View className="flex-row items-center gap-2">
-                                <Calculator size={20} color="#6b7280" />
-                                <Text className="text-base font-bold text-gray-700">Resumo do Turno</Text>
-                            </View>
-                        </View>
-
-                        <View className="p-5">
-                            {/* Encerrante */}
-                            <View className="flex-row justify-between items-center mb-3">
-                                <Text className="text-gray-500">Encerrante</Text>
-                                <Text className="text-lg font-bold text-purple-700">{formatCurrency(valorEncerrante)}</Text>
-                            </View>
-
-                            {/* Total Pagamentos */}
-                            <View className="flex-row justify-between items-center mb-2">
-                                <Text className="text-gray-500">Total Pagamentos</Text>
-                                <Text className="text-lg font-bold text-gray-800">{formatCurrency(totalInformado)}</Text>
-                            </View>
-
-                            {/* Detalhamento de Pagamentos */}
-                            <View className="pl-2 border-l-2 border-gray-100 mb-3">
-                                {parseValue(registro.valorCartaoDebito) > 0 && (
-                                    <View className="flex-row justify-between items-center mb-1">
-                                        <Text className="text-gray-400 text-xs">Cartão Débito</Text>
-                                        <Text className="text-xs font-medium text-gray-600">{formatCurrency(parseValue(registro.valorCartaoDebito))}</Text>
-                                    </View>
-                                )}
-                                {parseValue(registro.valorCartaoCredito) > 0 && (
-                                    <View className="flex-row justify-between items-center mb-1">
-                                        <Text className="text-gray-400 text-xs">Cartão Crédito</Text>
-                                        <Text className="text-xs font-medium text-gray-600">{formatCurrency(parseValue(registro.valorCartaoCredito))}</Text>
-                                    </View>
-                                )}
-                                {totalNotas > 0 && (
-                                    <View className="flex-row justify-between items-center mb-1">
-                                        <Text className="text-gray-400 text-xs">Notas/Vales ({notasAdicionadas.length})</Text>
-                                        <Text className="text-xs font-medium text-gray-600">{formatCurrency(totalNotas)}</Text>
-                                    </View>
-                                )}
-                                {parseValue(registro.valorPix) > 0 && (
-                                    <View className="flex-row justify-between items-center mb-1">
-                                        <Text className="text-gray-400 text-xs">PIX</Text>
-                                        <Text className="text-xs font-medium text-gray-600">{formatCurrency(parseValue(registro.valorPix))}</Text>
-                                    </View>
-                                )}
-                                {parseValue(registro.valorDinheiro) > 0 && (
-                                    <View className="flex-row justify-between items-center mb-1">
-                                        <Text className="text-gray-400 text-xs">Dinheiro</Text>
-                                        <Text className="text-xs font-medium text-gray-600">{formatCurrency(parseValue(registro.valorDinheiro))}</Text>
-                                    </View>
-                                )}
-                                {parseValue(registro.valorMoedas) > 0 && (
-                                    <View className="flex-row justify-between items-center mb-1">
-                                        <Text className="text-gray-400 text-xs">Moedas</Text>
-                                        <Text className="text-xs font-medium text-gray-600">{formatCurrency(parseValue(registro.valorMoedas))}</Text>
-                                    </View>
-                                )}
-
-                            </View>
-
-                            {/* Status da Diferença */}
-                            <View className="border-t border-dashed border-gray-200 pt-3 mt-2">
-                                {caixaBateu && (
-                                    <View className="flex-row justify-between items-center py-2 px-3 bg-green-50 rounded-lg -mx-1">
-                                        <View className="flex-row items-center gap-2">
-                                            <Check size={18} color="#16a34a" />
-                                            <Text className="text-green-700 font-bold">Caixa Bateu!</Text>
-                                        </View>
-                                        <Text className="text-lg font-black text-green-600">✓</Text>
-                                    </View>
-                                )}
-
-                                {temFalta && (
-                                    <View className="flex-row justify-between items-center py-2 px-3 bg-red-50 rounded-lg -mx-1">
-                                        <View className="flex-row items-center gap-2">
-                                            <AlertTriangle size={18} color="#dc2626" />
-                                            <Text className="text-red-600 font-bold">Falta de Caixa</Text>
-                                        </View>
-                                        <Text className="text-lg font-black text-red-600">- {formatCurrency(diferencaCaixa)}</Text>
-                                    </View>
-                                )}
-
-                                {temSobra && (
-                                    <View className="flex-row justify-between items-center py-2 px-3 bg-yellow-50 rounded-lg -mx-1">
-                                        <View className="flex-row items-center gap-2">
-                                            <AlertTriangle size={18} color="#ca8a04" />
-                                            <Text className="text-yellow-700 font-bold">Sobra de Caixa</Text>
-                                        </View>
-                                        <Text className="text-lg font-black text-yellow-600">+ {formatCurrency(Math.abs(diferencaCaixa))}</Text>
-                                    </View>
-                                )}
-
-                                {valorEncerrante === 0 && (
-                                    <View className="flex-row items-center gap-2 py-2">
-                                        <Text className="text-gray-400 text-sm">Informe o encerrante para ver o status</Text>
-                                    </View>
-                                )}
-                            </View>
-                        </View>
-                    </View>
-                </View>
+                <ResumoCard
+                    valorEncerrante={valorEncerrante}
+                    totalInformado={totalInformado}
+                    registro={registro}
+                    totalNotas={totalNotas}
+                    notasAdicionadas={notasAdicionadas}
+                    diferencaCaixa={diferencaCaixa}
+                    temFalta={temFalta}
+                    temSobra={temSobra}
+                    caixaBateu={caixaBateu}
+                />
 
                 {/* Botão Enviar */}
                 <View className="px-4 mt-8" style={{ marginBottom: insets.bottom + 40 }}>
@@ -989,138 +444,19 @@ export default function RegistroScreen() {
                 </View>
             </ScrollView>
 
-            {/* Modal de Adicionar Nota */}
-            <Modal
+            <NotaModal
                 visible={modalNotaVisible}
-                transparent={true}
-                animationType="slide"
-                onRequestClose={() => setModalNotaVisible(false)}
-            >
-                <View className="flex-1 bg-black/60 justify-end">
-                    <TouchableOpacity
-                        className="absolute inset-0"
-                        onPress={() => setModalNotaVisible(false)}
-                    />
-                    <View className="bg-white rounded-t-[40px] p-6 shadow-2xl">
-                        <View className="flex-row justify-between items-center mb-6">
-                            <Text className="text-2xl font-black text-gray-800">Nova Nota / Vale</Text>
-                            <TouchableOpacity
-                                onPress={() => setModalNotaVisible(false)}
-                                className="bg-gray-100 p-2 rounded-full"
-                            >
-                                <X size={20} color="#6b7280" />
-                            </TouchableOpacity>
-                        </View>
-
-                        <Text className="text-sm font-bold text-gray-500 mb-2 uppercase tracking-widest">Cliente</Text>
-
-                        {/* Campo de Busca de Cliente */}
-                        <View className="flex-row items-center bg-gray-50 rounded-2xl border border-gray-200 px-4 py-3 mb-4">
-                            <Search size={20} color="#9ca3af" style={{ marginRight: 8 }} />
-                            <TextInput
-                                className="flex-1 text-base text-gray-800"
-                                placeholder="Buscar cliente..."
-                                placeholderTextColor="#9ca3af"
-                                value={buscaCliente}
-                                onChangeText={setBuscaCliente}
-                                autoCapitalize="words"
-                            />
-                            {buscaCliente.length > 0 && (
-                                <TouchableOpacity onPress={() => setBuscaCliente('')}>
-                                    <X size={18} color="#9ca3af" />
-                                </TouchableOpacity>
-                            )}
-                        </View>
-
-                        <View className="mb-6 h-64">
-                            {clientes.length === 0 ? (
-                                <View className="p-4 bg-gray-50 rounded-2xl items-center border border-gray-100">
-                                    <Text className="text-gray-400 italic">Nenhum cliente cadastrado no sistema</Text>
-                                </View>
-                            ) : buscaCliente.length === 0 ? (
-                                <View className="flex-1 items-center justify-center bg-gray-50 rounded-2xl border-2 border-dashed border-gray-200 p-4">
-                                    <Search size={32} color="#9ca3af" style={{ opacity: 0.5, marginBottom: 8 }} />
-                                    <Text className="text-gray-400 text-center font-medium">Digite o nome para buscar...</Text>
-                                </View>
-                            ) : (
-                                <ScrollView
-                                    nestedScrollEnabled={true}
-                                    keyboardShouldPersistTaps="handled"
-                                    showsVerticalScrollIndicator={true}
-                                    className="border border-gray-100 rounded-2xl bg-gray-50/50"
-                                >
-                                    <View className="p-2">
-                                        {clientes.filter(c => c.nome.toLowerCase().includes(buscaCliente.toLowerCase())).length === 0 ? (
-                                            <View className="p-4 items-center">
-                                                <Text className="text-gray-400">Nenhum cliente encontrado</Text>
-                                            </View>
-                                        ) : (
-                                            clientes
-                                                .filter(c => c.nome.toLowerCase().includes(buscaCliente.toLowerCase()))
-                                                .map((cliente) => (
-                                                    <TouchableOpacity
-                                                        key={cliente.id}
-                                                        onPress={() => {
-                                                            setSelectedCliente(cliente);
-                                                            setBuscaCliente(''); // Limpa busca pra UX ficar top (ou não, dependendo, mas aqui fecha o modal depois né?)
-                                                            // Ah, não, aqui só seleciona. Então talvez manter o texto ajude a confirmar. Mas vou limpar pra ficar clean.
-                                                        }}
-                                                        className={`px-4 py-3 rounded-xl border-2 mb-2 w-full flex-row justify-between items-center ${cliente.bloqueado ? 'bg-gray-200 border-gray-300 opacity-70' : selectedCliente?.id === cliente.id ? 'bg-cyan-600 border-cyan-600' : 'bg-white border-gray-200'}`}
-                                                    >
-                                                        <View className="flex-1">
-                                                            <View className="flex-row items-center gap-2">
-                                                                <Text className={`font-bold text-base ${cliente.bloqueado ? 'text-gray-500' : selectedCliente?.id === cliente.id ? 'text-white' : 'text-gray-800'}`}>
-                                                                    {cliente.nome}
-                                                                </Text>
-                                                                {cliente.bloqueado && (
-                                                                    <View className="bg-red-500 px-2 py-0.5 rounded">
-                                                                        <Text className="text-white text-[10px] font-bold">BLOQUEADO</Text>
-                                                                    </View>
-                                                                )}
-                                                            </View>
-                                                            {cliente.documento && (
-                                                                <Text className={`text-xs mt-0.5 ${cliente.bloqueado ? 'text-gray-400' : selectedCliente?.id === cliente.id ? 'text-cyan-100' : 'text-gray-400'}`}>
-                                                                    {cliente.documento}
-                                                                </Text>
-                                                            )}
-                                                        </View>
-                                                        {cliente.bloqueado ? (
-                                                            <Ban size={20} color="#ef4444" />
-                                                        ) : selectedCliente?.id === cliente.id ? (
-                                                            <Check size={20} color="white" />
-                                                        ) : null}
-                                                    </TouchableOpacity>
-                                                ))
-                                        )}
-                                    </View>
-                                </ScrollView>
-                            )}
-                        </View>
-
-                        <Text className="text-sm font-bold text-gray-500 mb-2 uppercase tracking-widest">Valor da Nota</Text>
-                        <View className="flex-row items-center bg-gray-50 rounded-3xl p-4 border-2 border-cyan-100 mb-8">
-                            <Text className="text-2xl font-bold text-cyan-600 mr-2">R$</Text>
-                            <TextInput
-                                className="flex-1 text-3xl font-black text-gray-800"
-                                placeholder="0,00"
-                                value={valorNotaTemp}
-                                onChangeText={(text) => setValorNotaTemp(formatCurrencyInput(text))}
-                                keyboardType="numeric"
-                            />
-                        </View>
-
-                        <TouchableOpacity
-                            onPress={handleAddNota}
-                            className={`py-4 rounded-3xl flex-row justify-center items-center shadow-lg ${!selectedCliente || parseValue(valorNotaTemp) === 0 ? 'bg-gray-300' : 'bg-cyan-600 shadow-cyan-200'}`}
-                            disabled={!selectedCliente || parseValue(valorNotaTemp) === 0}
-                        >
-                            <Plus size={24} color="white" style={{ marginRight: 8 }} />
-                            <Text className="text-white text-lg font-black">Adicionar Nota</Text>
-                        </TouchableOpacity>
-                        <View style={{ height: insets.bottom + 20 }} />
-                    </View>
-                </View>
-            </Modal>
+                onClose={() => setModalNotaVisible(false)}
+                clientes={clientes}
+                selectedCliente={selectedCliente}
+                setSelectedCliente={setSelectedCliente}
+                valorNotaTemp={valorNotaTemp}
+                setValorNotaTemp={setValorNotaTemp}
+                buscaCliente={buscaCliente}
+                setBuscaCliente={setBuscaCliente}
+                onAddNota={handleAddNota}
+                insets={insets}
+            />
 
             {/* DatePicker para Android */}
             {showDatePicker && Platform.OS === 'android' && (
@@ -1129,7 +465,7 @@ export default function RegistroScreen() {
                     mode="date"
                     display="default"
                     onChange={handleDateChange}
-                    maximumDate={new Date()} // Não permite selecionar datas futuras
+                    maximumDate={new Date()}
                 />
             )}
 

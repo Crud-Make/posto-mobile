@@ -2,36 +2,32 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, TextInput, TouchableOpacity, ScrollView, Alert, ActivityIndicator } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ShoppingBag, Search, Plus } from 'lucide-react-native';
-import { Picker } from '@react-native-picker/picker'; // Standard pickers often need installed package. Expo uses native or library. 
-// Assuming @react-native-picker/picker is not installed yet? Or maybe it is?
-// I will use standard View + Text if Picker fails, but let's assume valid environment. 
-// Or I can use a simple Dropdown implementation. 
-// For now I'll use Picker assuming it's standard or commonly available.
-// Actually, standard react-native Picker is deprecated. 
-// I'll check user dependencies later. For now, I'll use a mocked UI for picker if import fails?
-// No, I'll use simple list or assume Picker is available or use modal.
-// Wait, I should assume standard Expo libraries. 
-// "Picker" has been moved to @react-native-picker/picker.
-// To be safe without installing new deps, I might use a Modal Selector or just a list if few items.
-// But I'll assume I can use it or the user can install it.
-// Wait, the user has `expo-router`.
-// I'll check package.json? No time.
-// I'll use standard RN Text/Button for selection for safety if Picker is missing.
-// Actually, I'll use a simple "Tap to select" logic with a specific View mode if needed.
-// But to be robust: I'll try importing Picker.
-// If not, I'll change it.
 
 import { supabase } from '../../lib/supabase';
 import { frentistaService } from '../../services/frentista';
 import { produtoService, type Produto } from '../../services/produto';
 import { vendaProdutoService, type VendaProduto } from '../../services/vendaProduto';
 
+/**
+ * Interface que representa os dados básicos do frentista na tela de vendas.
+ */
 interface Frentista {
+    /** ID único do frentista */
     id: number;
+    /** Nome do frentista */
     nome: string;
+    /** ID do posto associado */
     posto_id: number;
 }
 
+/**
+ * Tela de Venda de Produtos.
+ * Permite que o frentista registre vendas de produtos (óleo, aditivos, etc.)
+ * e visualize as vendas realizadas no dia atual.
+ * 
+ * @component
+ * @returns {JSX.Element} O componente da tela de vendas.
+ */
 export default function VendasScreen() {
     const insets = useSafeAreaInsets();
     const [frentista, setFrentista] = useState<Frentista | null>(null);
@@ -45,11 +41,18 @@ export default function VendasScreen() {
     const [quantidade, setQuantidade] = useState('1');
     const [searchTerm, setSearchTerm] = useState('');
 
+    /**
+     * Efeito inicial para carregar o usuário logado e dados iniciais.
+     */
     useEffect(() => {
         loadUser();
         loadData();
     }, []);
 
+    /**
+     * Carrega as informações do frentista logado.
+     * Busca o usuário autenticado no Supabase e seus dados na tabela de frentistas.
+     */
     const loadUser = async () => {
         try {
             const { data: { user } } = await supabase.auth.getUser();
@@ -65,6 +68,9 @@ export default function VendasScreen() {
         }
     };
 
+    /**
+     * Efeito que recarrega vendas e produtos quando o frentista é identificado.
+     */
     useEffect(() => {
         if (frentista?.id) {
             loadVendas();
@@ -72,6 +78,9 @@ export default function VendasScreen() {
         }
     }, [frentista?.id, frentista?.posto_id]);
 
+    /**
+     * Carrega a lista de produtos disponíveis para o posto do frentista.
+     */
     const loadData = async () => {
         try {
             setLoading(true);
@@ -86,6 +95,9 @@ export default function VendasScreen() {
         }
     };
 
+    /**
+     * Carrega as vendas de produtos realizadas pelo frentista no dia de hoje.
+     */
     const loadVendas = async () => {
         if (!frentista?.id) return;
         try {
@@ -96,6 +108,10 @@ export default function VendasScreen() {
         }
     };
 
+    /**
+     * Processa o registro de uma nova venda.
+     * Valida o estoque, quantidade e registra a venda no banco de dados.
+     */
     const handleVenda = async () => {
         if (!selectedProdutoId || !frentista?.id) return;
 

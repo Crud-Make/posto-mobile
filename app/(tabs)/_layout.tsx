@@ -8,6 +8,14 @@ import { frentistaService } from '../../services/frentista';
 import { usuarioService } from '../../services/usuario';
 import { turnoService } from '../../services/turno';
 
+/**
+ * Layout principal das abas da aplicação.
+ * Gerencia a navegação entre Registro, Vendas, Histórico e Perfil.
+ * Também verifica o status do frentista ao carregar.
+ * 
+ * @component
+ * @returns {JSX.Element} O componente de layout das abas.
+ */
 export default function TabsLayout() {
     const insets = useSafeAreaInsets();
     const [checking, setChecking] = useState(true);
@@ -18,6 +26,12 @@ export default function TabsLayout() {
         checkFrentistaStatus();
     }, []);
 
+    /**
+     * Verifica o status da conta do frentista.
+     * Checa se o usuário está logado e se possui permissões.
+     * Em modo universal, permite acesso mesmo sem login explícito em alguns casos,
+     * mas mantém a lógica de verificação para exibir status correto.
+     */
     async function checkFrentistaStatus() {
         try {
             // Em Modo Universal, não bloqueamos se não houver usuário logado
@@ -49,6 +63,9 @@ export default function TabsLayout() {
         }
     }
 
+    /**
+     * Realiza o logout do usuário e redireciona para a tela inicial.
+     */
     async function handleLogout() {
         await supabase.auth.signOut();
         router.replace('/');

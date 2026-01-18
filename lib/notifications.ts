@@ -15,14 +15,21 @@ Notifications.setNotificationHandler({
     }),
 });
 
+/**
+ * Estado de notificação push
+ */
 export interface PushNotificationState {
+    /** Token Expo Push */
     expoPushToken: string | null;
+    /** Objeto de notificação recebido */
     notification: Notifications.Notification | null;
 }
 
 /**
- * Registra o dispositivo para receber push notifications
- * Retorna o Expo Push Token ou null se falhar
+ * Registra o dispositivo para receber push notifications.
+ * Solicita permissões ao usuário e obtém o Expo Push Token.
+ * 
+ * @returns {Promise<string | null>} O Expo Push Token ou null se falhar.
  */
 export async function registerForPushNotificationsAsync(): Promise<string | null> {
     let token: string | null = null;
@@ -82,7 +89,11 @@ export async function registerForPushNotificationsAsync(): Promise<string | null
 }
 
 /**
- * Salva o push token no Supabase vinculado ao usuário/frentista
+ * Salva o push token no Supabase vinculado ao usuário/frentista.
+ * Se já existir, atualiza o timestamp e marca como ativo.
+ * 
+ * @param {string} expoPushToken - O token obtido do Expo.
+ * @returns {Promise<boolean>} True se salvou com sucesso.
  */
 export async function savePushToken(expoPushToken: string): Promise<boolean> {
     try {
@@ -155,7 +166,10 @@ export async function savePushToken(expoPushToken: string): Promise<boolean> {
 }
 
 /**
- * Remove o push token do Supabase (logout)
+ * Remove o push token do Supabase (logout).
+ * Marca o token como inativo.
+ * 
+ * @param {string} expoPushToken - O token a ser removido.
  */
 export async function removePushToken(expoPushToken: string): Promise<void> {
     try {
@@ -169,7 +183,9 @@ export async function removePushToken(expoPushToken: string): Promise<void> {
 }
 
 /**
- * Busca notificações não lidas do frentista
+ * Busca notificações não lidas do frentista.
+ * 
+ * @returns {Promise<unknown[]>} Lista de notificações.
  */
 export async function getUnreadNotifications(): Promise<unknown[]> {
     try {
@@ -213,28 +229,21 @@ export async function markNotificationAsRead(notificationId: number): Promise<vo
 }
 
 /**
- * Configura os listeners de notificação
- * Retorna função para cleanup
+ * Configura os listeners para recebimento e interação com notificações.
+ * 
+ * @param {function} onNotificationReceived - Callback para quando receber notificação.
+ * @param {function} onNotificationResponse - Callback para quando usuário interagir.
+ * @returns {function} Função de cleanup para remover listeners.
  */
 export function setupNotificationListeners(
-    onNotificationReceived?: (notification: Notifications.Notification) => void,
-    onNotificationResponse?: (response: Notifications.NotificationResponse) => void
-): () => void {
-    // Listener para quando a notificação é recebida (app em foreground)
-    const notificationListener = Notifications.addNotificationReceivedListener(notification => {
-        console.log('Notificação recebida:', notification);
-        onNotificationReceived?.(notification);
-    });
+    onNotificationReceived: (notification: Notifications.Notification) => void,
+    onNotificationResponse: (response: Notifications.NotificationResponse) => void
+) {
+    const receivedSubscription = Notifications.addNotificationReceivedListener(onNotificationReceived);
+    const responseSubscription = Notifications.addNotificationResponseReceivedListener(onNotificationResponse);
 
-    // Listener para quando o usuário interage com a notificação
-    const responseListener = Notifications.addNotificationResponseReceivedListener(response => {
-        console.log('Resposta à notificação:', response);
-        onNotificationResponse?.(response);
-    });
-
-    // Retorna função para remover listeners
     return () => {
-        notificationListener.remove();
-        responseListener.remove();
+        receivedSubscription.remove();
+        responseSubscription.remove();
     };
 }

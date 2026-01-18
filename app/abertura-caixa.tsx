@@ -7,6 +7,14 @@ import { turnoService, type Turno } from '../services/turno';
 import { frentistaService, type Frentista } from '../services/frentista';
 import { Clock, Check, LogOut } from 'lucide-react-native';
 
+/**
+ * Tela de Abertura de Caixa.
+ * Permite que o frentista selecione o turno atual e inicie as operações.
+ * Verifica o frentista logado e lista os turnos disponíveis para o posto.
+ * 
+ * @component
+ * @returns {JSX.Element} O componente da tela de abertura de caixa.
+ */
 export default function AberturaCaixaScreen() {
     const insets = useSafeAreaInsets();
 	const [loading, setLoading] = useState(true);
@@ -15,10 +23,17 @@ export default function AberturaCaixaScreen() {
     const [selectedTurnoId, setSelectedTurnoId] = useState<number | null>(null);
 	const [frentista, setFrentista] = useState<Frentista | null>(null);
 
+    /**
+     * Efeito inicial para carregar dados do frentista e turnos.
+     */
     useEffect(() => {
         loadData();
     }, []);
 
+    /**
+     * Carrega os dados do frentista logado e os turnos do posto.
+     * Redireciona para login se não houver usuário.
+     */
     async function loadData() {
         try {
             const { data: { user } } = await supabase.auth.getUser();
@@ -49,6 +64,10 @@ export default function AberturaCaixaScreen() {
         }
     }
 
+    /**
+     * Processa a abertura do caixa para o turno selecionado.
+     * Chama a procedure RPC 'abrir_caixa' no Supabase.
+     */
     async function handleAbrirCaixa() {
         if (!selectedTurnoId) {
             Alert.alert('Atenção', 'Selecione um turno para iniciar.');
@@ -81,6 +100,9 @@ export default function AberturaCaixaScreen() {
         }
     }
 
+    /**
+     * Realiza o logout do usuário.
+     */
     async function handleLogout() {
         await supabase.auth.signOut();
         router.replace('/');

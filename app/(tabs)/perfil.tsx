@@ -5,7 +5,7 @@ import { supabase } from '../../lib/supabase';
 import { router } from 'expo-router';
 import * as Updates from 'expo-updates';
 import { useUpdateChecker } from '../../lib/useUpdateChecker';
-import type { Escala } from '../../lib/types';
+import type { Escala } from '@posto/types';
 import QRCode from 'react-native-qrcode-svg';
 import {
     User,
@@ -31,13 +31,28 @@ import {
 } from 'lucide-react-native';
 import type { LucideIcon } from 'lucide-react-native';
 
+/**
+ * Estatísticas de desempenho do usuário.
+ */
 interface UserStats {
+    /** Total de registros de turno realizados */
     totalRegistros: number;
+    /** Registros sem divergências (OK) */
     registrosSemFalta: number;
+    /** Registros com divergências (falta/sobra) */
     registrosComFalta: number;
+    /** Porcentagem de acerto (fechamentos OK / total) */
     taxaAcerto: number;
 }
 
+/**
+ * Tela de Perfil do Usuário.
+ * Exibe informações do frentista, estatísticas, escala de folgas e opções do aplicativo.
+ * Permite verificar atualizações e compartilhar o app via QR Code.
+ * 
+ * @component
+ * @returns {JSX.Element} O componente da tela de perfil.
+ */
 export default function PerfilScreen() {
     const insets = useSafeAreaInsets();
     const [userName, setUserName] = useState('Frentista');
@@ -71,6 +86,10 @@ export default function PerfilScreen() {
         autoDownload: true
     });
 
+    /**
+     * Verifica manualmente se há atualizações do app via Expo Updates.
+     * Exibe alertas informando o status da verificação.
+     */
     async function handleCheckUpdates() {
         if (__DEV__) {
             Alert.alert('Modo DEV', 'Updates não funcionam em desenvolvimento local.');
@@ -85,6 +104,9 @@ export default function PerfilScreen() {
         }
     }
 
+    /**
+     * Compartilha o link de download do aplicativo usando a API nativa de compartilhamento.
+     */
     async function handleShareApp() {
         try {
             await Share.share({
@@ -96,10 +118,17 @@ export default function PerfilScreen() {
         }
     }
 
+    /**
+     * Carrega dados iniciais do perfil.
+     */
     useEffect(() => {
         loadData();
     }, []);
 
+    /**
+     * Simula o carregamento dos dados do usuário.
+     * Em uma implementação completa, buscaria do Supabase.
+     */
     async function loadData() {
         setLoading(true);
         try {
@@ -114,10 +143,16 @@ export default function PerfilScreen() {
         }
     }
 
+    /**
+     * Executa a ação de logout (simulada para modo livre).
+     */
     const handleLogout = () => {
         Alert.alert('Modo Livre', 'O login não é mais necessário neste aplicativo.');
     };
 
+    /**
+     * Componente interno para renderizar itens do menu de opções.
+     */
     const MenuItem = ({
         icon: Icon,
         label,

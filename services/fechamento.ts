@@ -2,40 +2,77 @@ import { supabase } from '../lib/supabase';
 import { usuarioService } from './usuario';
 import { frentistaService } from './frentista';
 
+/**
+ * Interface que representa um fechamento de turno geral (caixa).
+ */
 export interface Fechamento {
+    /** Identificador único do fechamento */
     id: number;
+    /** Data do fechamento (YYYY-MM-DD) */
     data: string;
+    /** ID do usuário responsável pelo fechamento */
     usuario_id: number;
+    /** ID do turno do fechamento */
     turno_id: number;
+    /** Status do fechamento (ex: 'ABERTO', 'FECHADO') */
     status: string;
+    /** Valor total das vendas registradas */
     total_vendas?: number;
+    /** Valor total recebido (soma dos pagamentos) */
     total_recebido?: number;
+    /** Diferença entre recebido e vendas (sobra/falta) */
     diferenca?: number;
+    /** Observações gerais do fechamento */
     observacoes?: string;
+    /** ID do posto ao qual o fechamento pertence */
     posto_id: number;
 }
 
+/**
+ * Interface para entrada de nota a prazo por um frentista.
+ */
 export interface NotaFrentistaInput {
+    /** ID do cliente da nota */
     cliente_id: number;
+    /** Valor da nota */
     valor: number;
 }
 
+/**
+ * Interface que representa o fechamento individual de um frentista.
+ */
 export interface FechamentoFrentista {
+    /** Identificador único do fechamento do frentista */
     id: number;
+    /** ID do fechamento geral vinculado */
     fechamento_id: number;
+    /** ID do frentista */
     frentista_id: number;
+    /** Valor em cartão (legado/genérico) */
     valor_cartao: number;
+    /** Valor em cartão de débito */
     valor_cartao_debito: number;
+    /** Valor em cartão de crédito */
     valor_cartao_credito: number;
+    /** Valor em dinheiro */
     valor_dinheiro: number;
+    /** Valor em PIX */
     valor_pix: number;
+    /** Valor em notas a prazo */
     valor_nota: number;
+    /** Valor total conferido/informado */
     valor_conferido: number;
+    /** Valor em moedas (informativo, geralmente já incluso em dinheiro) */
     valor_moedas: number;
+    /** Diferença calculada para o frentista */
     diferenca: number;
+    /** Observações do frentista */
     observacoes: string | null;
 }
 
+/**
+ * Interface para histórico de fechamentos de frentista com dados relacionados.
+ */
 export interface FechamentoFrentistaHistorico {
     id: number;
     valor_cartao: number | null;
@@ -55,29 +92,54 @@ export interface FechamentoFrentistaHistorico {
     } | null;
 }
 
+/**
+ * Dados necessários para submeter um fechamento via mobile.
+ */
 export interface SubmitClosingData {
+    /** Data do fechamento (YYYY-MM-DD) */
     data: string;
+    /** ID do turno */
     turno_id: number;
+    /** Valor total em débito informado */
     valor_cartao_debito: number;
+    /** Valor total em crédito informado */
     valor_cartao_credito: number;
+    /** Valor total em notas a prazo informado */
     valor_nota: number;
+    /** Valor total em PIX informado */
     valor_pix: number;
+    /** Valor total em dinheiro informado */
     valor_dinheiro: number;
+    /** Valor total em moedas informado */
     valor_moedas: number;
+    /** Valor total do encerrante (vendas totais da bomba) */
     valor_encerrante: number;
+    /** Valor da diferença (sobra ou falta) */
     falta_caixa: number;
+    /** Observações do fechamento */
     observacoes: string;
+    /** ID do posto */
     posto_id: number;
+    /** ID do frentista (opcional, se não fornecido usa o logado) */
     frentista_id?: number;
+    /** Lista de notas a prazo detalhadas */
     notas?: NotaFrentistaInput[];
 }
 
 /**
- * Gerencia fechamentos de caixa
+ * Serviço para gerenciar fechamentos de caixa (geral).
  */
 export const fechamentoService = {
     /**
-     * Busca ou cria um fechamento para a data e turno especificados
+     * Busca ou cria um fechamento para a data e turno especificados.
+     * 
+     * @param {string} data - Data do fechamento.
+     * @param {number} turnoId - ID do turno.
+     * @param {number | null} usuarioId - ID do usuário criando o fechamento.
+     * @param {number} [totalRecebido=0] - Valor total recebido inicial.
+     * @param {number} [totalVendas=0] - Valor total de vendas inicial.
+     * @param {number} [postoId] - ID do posto.
+     * @returns {Promise<Fechamento>} O fechamento encontrado ou criado.
      */
     async getOrCreate(
         data: string,
@@ -128,7 +190,12 @@ export const fechamentoService = {
     },
 
     /**
-     * Atualiza os totais do fechamento baseado na soma do que foi informado pelos frentistas
+     * Atualiza os totais do fechamento baseado na soma do que foi informado pelos frentistas.
+     * 
+     * @param {number} fechamentoId - ID do fechamento a atualizar.
+     * @param {number} [totalVendasManual=0] - Total de vendas manual (opcional).
+     * @param {string} [observacoes] - Observações a adicionar.
+     * @returns {Promise<void>}
      */
     async updateTotals(
         fechamentoId: number,
@@ -183,11 +250,14 @@ export const fechamentoService = {
 };
 
 /**
- * Gerencia fechamentos individuais de frentistas
+ * Serviço para gerenciar fechamentos individuais de frentistas.
  */
 export const fechamentoFrentistaService = {
     /**
-     * Cria um fechamento de frentista
+     * Cria um novo registro de fechamento de frentista.
+     * 
+     * @param {object} data - Dados do fechamento do frentista.
+     * @returns {Promise<FechamentoFrentista>} O registro criado.
      */
     async create(data: {
         fechamento_id: number;
@@ -219,7 +289,11 @@ export const fechamentoFrentistaService = {
     },
 
     /**
-     * Atualiza um fechamento de frentista existente
+     * Atualiza um fechamento de frentista existente.
+     * 
+     * @param {number} id - ID do fechamento de frentista.
+     * @param {object} data - Dados a serem atualizados.
+     * @returns {Promise<FechamentoFrentista>} O registro atualizado.
      */
     async update(id: number, data: {
         valor_cartao: number;
@@ -248,6 +322,13 @@ export const fechamentoFrentistaService = {
         return updated;
     },
 
+    /**
+     * Verifica se existe um fechamento para o frentista e retorna seu ID.
+     * 
+     * @param {number} fechamentoId - ID do fechamento geral.
+     * @param {number} frentistaId - ID do frentista.
+     * @returns {Promise<number | null>} O ID do fechamento do frentista ou null.
+     */
     async getExisting(fechamentoId: number, frentistaId: number): Promise<number | null> {
         const { data, error } = await supabase
             .from('FechamentoFrentista')
@@ -261,7 +342,11 @@ export const fechamentoFrentistaService = {
     },
 
     /**
-     * Verifica se já existe um fechamento para este frentista no fechamento especificado
+     * Verifica se já existe um fechamento para este frentista no fechamento especificado.
+     * 
+     * @param {number} fechamentoId - ID do fechamento geral.
+     * @param {number} frentistaId - ID do frentista.
+     * @returns {Promise<boolean>} True se existir, False caso contrário.
      */
     async exists(fechamentoId: number, frentistaId: number): Promise<boolean> {
         const existing = await this.getExisting(fechamentoId, frentistaId);
@@ -269,7 +354,12 @@ export const fechamentoFrentistaService = {
     },
 
     /**
-     * Busca histórico de fechamentos do frentista
+     * Busca o histórico de fechamentos de um frentista.
+     * 
+     * @param {number} frentistaId - ID do frentista.
+     * @param {number} postoId - ID do posto.
+     * @param {number} [limit=10] - Limite de registros a retornar.
+     * @returns {Promise<any[]>} Lista de históricos formatados.
      */
     async getHistorico(frentistaId: number, postoId: number, limit = 10): Promise<{
         id: number;
@@ -323,7 +413,11 @@ export const fechamentoFrentistaService = {
 };
 
 /**
- * Função principal para submeter um fechamento de caixa do mobile
+ * Função principal para submeter um fechamento de caixa do mobile.
+ * Realiza todas as validações, cria/busca o fechamento geral e registra o fechamento do frentista.
+ * 
+ * @param {SubmitClosingData} closingData - Dados do fechamento.
+ * @returns {Promise<{success: boolean, message: string, fechamentoId?: number}>} Resultado da operação.
  */
 export async function submitMobileClosing(closingData: SubmitClosingData): Promise<{
     success: boolean;
