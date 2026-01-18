@@ -1,5 +1,6 @@
 import * as Device from 'expo-device';
 import * as Notifications from 'expo-notifications';
+import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 import { supabase } from './supabase';
 
@@ -47,9 +48,18 @@ export async function registerForPushNotificationsAsync(): Promise<string | null
     }
 
     try {
+        const projectId =
+            Constants.expoConfig?.extra?.eas?.projectId ||
+            Constants.easConfig?.projectId ||
+            Constants.expoConfig?.extra?.projectId;
+
+        if (!projectId) {
+            return null;
+        }
+
         // Obter o Expo Push Token
         const pushTokenResponse = await Notifications.getExpoPushTokenAsync({
-            projectId: 'posto-frentista', // Deve coincidir com o slug do app.json
+            projectId: String(projectId),
         });
         token = pushTokenResponse.data;
         console.log('Expo Push Token:', token);
@@ -99,8 +109,8 @@ export async function savePushToken(expoPushToken: string): Promise<boolean> {
         const { data: frentista } = await supabase
             .from('Frentista')
             .select('id')
-            .eq('supabase_user_id', user.id)
-            .single();
+            .eq('user_id', user.id)
+            .maybeSingle();
 
         // Verificar se o token já existe
         const { data: existingToken } = await supabase
@@ -108,20 +118,22 @@ export async function savePushToken(expoPushToken: string): Promise<boolean> {
             .select('id')
             .eq('usuario_id', usuario.id)
             .eq('expo_push_token', expoPushToken)
-            .single();
+            .maybeSingle();
 
         if (existingToken) {
             // Atualizar token existente (ativar e atualizar timestamp)
-            await supabase
+            const { error: updateError } = await supabase
                 .from('PushToken')
                 .update({
                     ativo: true,
                     device_info: `${Device.brand} ${Device.modelName} - ${Platform.OS} ${Platform.Version}`,
                 })
                 .eq('id', existingToken.id);
+
+            if (updateError) return false;
         } else {
             // Inserir novo token
-            await supabase
+            const { error: insertError } = await supabase
                 .from('PushToken')
                 .insert({
                     usuario_id: usuario.id,
@@ -130,6 +142,8 @@ export async function savePushToken(expoPushToken: string): Promise<boolean> {
                     device_info: `${Device.brand} ${Device.modelName} - ${Platform.OS} ${Platform.Version}`,
                     ativo: true,
                 });
+
+            if (insertError) return false;
         }
 
         console.log('Push token salvo com sucesso');
@@ -157,7 +171,7 @@ export async function removePushToken(expoPushToken: string): Promise<void> {
 /**
  * Busca notificações não lidas do frentista
  */
-export async function getUnreadNotifications(): Promise<any[]> {
+export async function getUnreadNotifications(): Promise<unknown[]> {
     try {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) return [];
@@ -165,8 +179,8 @@ export async function getUnreadNotifications(): Promise<any[]> {
         const { data: frentista } = await supabase
             .from('Frentista')
             .select('id')
-            .eq('supabase_user_id', user.id)
-            .single();
+            .eq('user_id', user.id)
+            .maybeSingle();
 
         if (!frentista) return [];
 

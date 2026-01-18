@@ -13,6 +13,8 @@ import {
     Gauge
 } from 'lucide-react-native';
 
+type HistoricoFiltro = 'todos' | 'ok' | 'divergente';
+
 interface HistoricoItem {
     id: number;
     data: string;
@@ -27,10 +29,10 @@ interface HistoricoItem {
 export default function HistoricoScreen() {
     const insets = useSafeAreaInsets();
     const { postoAtivoId } = usePosto();
-    const [historico, setHistorico] = useState<HistoricoItem[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [refreshing, setRefreshing] = useState(false);
-    const [filtroAtivo, setFiltroAtivo] = useState<'todos' | 'ok' | 'divergente'>('todos');
+	const [historico, setHistorico] = useState<HistoricoItem[]>([]);
+	const [loading, setLoading] = useState(true);
+	const [refreshing, setRefreshing] = useState(false);
+	const [filtroAtivo, setFiltroAtivo] = useState<HistoricoFiltro>('todos');
 
     const loadHistorico = async () => {
         if (!postoAtivoId) return;
@@ -126,15 +128,15 @@ export default function HistoricoScreen() {
 
             {/* Filtros */}
             <View className="flex-row px-4 mt-4 gap-2">
-                {[
-                    { key: 'todos', label: 'Todos' },
-                    { key: 'ok', label: 'Caixa OK' },
-                    { key: 'divergente', label: 'Divergente' },
-                ].map((filtro) => (
+				{[
+					{ key: 'todos' as HistoricoFiltro, label: 'Todos' },
+					{ key: 'ok' as HistoricoFiltro, label: 'Caixa OK' },
+					{ key: 'divergente' as HistoricoFiltro, label: 'Divergente' },
+				].map((filtro) => (
                     <TouchableOpacity
                         key={filtro.key}
-                        className={`px-4 py-2 rounded-full ${filtroAtivo === filtro.key ? 'bg-primary-700' : 'bg-white border border-gray-200'}`}
-                        onPress={() => setFiltroAtivo(filtro.key as any)}
+						className={`px-4 py-2 rounded-full ${filtroAtivo === filtro.key ? 'bg-primary-700' : 'bg-white border border-gray-200'}`}
+						onPress={() => setFiltroAtivo(filtro.key)}
                     >
                         <Text className={`text-sm font-semibold ${filtroAtivo === filtro.key ? 'text-white' : 'text-gray-600'}`}>
                             {filtro.label}

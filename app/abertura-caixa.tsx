@@ -3,16 +3,16 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useState, useEffect } from 'react';
 import { router } from 'expo-router';
 import { supabase } from '../lib/supabase';
-import { turnoService, frentistaService } from '../lib/api';
+import { turnoService, frentistaService, type Turno, type Frentista } from '../lib/api';
 import { Clock, Check, LogOut } from 'lucide-react-native';
 
 export default function AberturaCaixaScreen() {
     const insets = useSafeAreaInsets();
-    const [loading, setLoading] = useState(true);
-    const [submitting, setSubmitting] = useState(false);
-    const [turnos, setTurnos] = useState<any[]>([]);
+	const [loading, setLoading] = useState(true);
+	const [submitting, setSubmitting] = useState(false);
+	const [turnos, setTurnos] = useState<Turno[]>([]);
     const [selectedTurnoId, setSelectedTurnoId] = useState<number | null>(null);
-    const [frentista, setFrentista] = useState<any>(null);
+	const [frentista, setFrentista] = useState<Frentista | null>(null);
 
     useEffect(() => {
         loadData();
@@ -71,9 +71,10 @@ export default function AberturaCaixaScreen() {
 
             // Sucesso! Redirecionar para o app principal
             router.replace('/(tabs)/registro');
-        } catch (error: any) {
-            console.error('Erro ao abrir caixa:', error);
-            Alert.alert('Erro', 'Falha ao iniciar turno: ' + error.message);
+		} catch (error) {
+			console.error('Erro ao abrir caixa:', error);
+			const message = error instanceof Error ? error.message : 'Falha ao iniciar turno';
+			Alert.alert('Erro', 'Falha ao iniciar turno: ' + message);
         } finally {
             setSubmitting(false);
         }

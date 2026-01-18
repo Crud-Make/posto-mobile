@@ -1,37 +1,38 @@
 import { View, Text, TextInput, TouchableOpacity, ScrollView, Alert, ActivityIndicator, KeyboardAvoidingView, Platform, Modal, FlatList } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useState, useEffect } from 'react';
-import DateTimePicker from '@react-native-community/datetimepicker';
+import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { supabase } from '../../lib/supabase';
 import { submitMobileClosing, turnoService, frentistaService, clienteService, type SubmitClosingData, type Cliente, type Turno, type Frentista } from '../../lib/api';
 import { usePosto } from '../../lib/PostoContext';
 import {
-    CreditCard,
-    Receipt,
-    Smartphone,
-    Banknote,
-    AlertTriangle,
-    Check,
-    Send,
-    Calculator,
-    ChevronDown,
-    Clock,
-    User,
-    Gauge,
-    Plus,
-    Trash2,
-    X,
-    Search,
-    Coins,
-    Ban,
-    Calendar
+	CreditCard,
+	Receipt,
+	Smartphone,
+	Banknote,
+	AlertTriangle,
+	Check,
+	Send,
+	Calculator,
+	ChevronDown,
+	Clock,
+	User,
+	Gauge,
+	Plus,
+	Trash2,
+	X,
+	Search,
+	Coins,
+	Ban,
+	Calendar
 } from 'lucide-react-native';
+import type { LucideIcon } from 'lucide-react-native';
 
 // Tipos
 interface FormaPagamento {
     id: string;
     label: string;
-    icon: any;
+	icon: LucideIcon;
     color: string;
     bgColor: string;
 }
@@ -138,7 +139,7 @@ export default function RegistroScreen() {
     /**
      * Handler para mudança de data no DatePicker
      */
-    const handleDateChange = (event: any, selectedDate?: Date) => {
+	const handleDateChange = (event: DateTimePickerEvent, selectedDate?: Date) => {
         setShowDatePicker(Platform.OS === 'ios'); // No iOS mantém aberto, no Android fecha
         if (selectedDate) {
             setDataFechamento(selectedDate);

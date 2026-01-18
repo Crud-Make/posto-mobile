@@ -41,7 +41,7 @@ export interface Usuario {
 export interface Fechamento {
     id: number;
     data: string;
-    usuario_id: string;
+	usuario_id: number;
     turno_id: number;
     status: string;
     total_vendas?: number;
@@ -71,6 +71,7 @@ export interface FechamentoFrentista {
     valor_cartao: number;
     valor_cartao_debito: number;
     valor_cartao_credito: number;
+	valor_moedas?: number;
     valor_dinheiro: number;
     valor_pix: number;
     valor_nota: number;

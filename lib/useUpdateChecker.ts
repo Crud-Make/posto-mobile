@@ -108,13 +108,14 @@ export function useUpdateChecker(options?: {
                 }));
                 return false;
             }
-        } catch (error: any) {
-            console.error('[OTA] Erro ao verificar atualizações:', error);
-            setUpdateInfo(prev => ({
-                ...prev,
-                status: 'error',
-                error: error.message || 'Erro desconhecido'
-            }));
+		} catch (error) {
+			console.error('[OTA] Erro ao verificar atualizações:', error);
+			const message = error instanceof Error ? error.message : 'Erro desconhecido';
+			setUpdateInfo(prev => ({
+				...prev,
+				status: 'error',
+				error: message
+			}));
             return false;
         }
     }, [autoDownload]);
@@ -154,14 +155,15 @@ export function useUpdateChecker(options?: {
             }
 
             return false;
-        } catch (error: any) {
-            console.error('[OTA] Erro ao baixar atualização:', error);
-            setUpdateInfo(prev => ({
-                ...prev,
-                status: 'error',
-                isDownloading: false,
-                error: error.message || 'Erro ao baixar'
-            }));
+		} catch (error) {
+			console.error('[OTA] Erro ao baixar atualização:', error);
+			const message = error instanceof Error ? error.message : 'Erro ao baixar';
+			setUpdateInfo(prev => ({
+				...prev,
+				status: 'error',
+				isDownloading: false,
+				error: message
+			}));
             return false;
         }
     }, [criticalUpdate]);
@@ -178,13 +180,14 @@ export function useUpdateChecker(options?: {
         try {
             console.log('[OTA] Aplicando atualização e reiniciando...');
             await Updates.reloadAsync();
-        } catch (error: any) {
-            console.error('[OTA] Erro ao aplicar atualização:', error);
-            setUpdateInfo(prev => ({
-                ...prev,
-                status: 'error',
-                error: error.message || 'Erro ao aplicar'
-            }));
+		} catch (error) {
+			console.error('[OTA] Erro ao aplicar atualização:', error);
+			const message = error instanceof Error ? error.message : 'Erro ao aplicar';
+			setUpdateInfo(prev => ({
+				...prev,
+				status: 'error',
+				error: message
+			}));
         }
     }, []);
 

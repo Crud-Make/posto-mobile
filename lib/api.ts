@@ -62,10 +62,11 @@ export interface Frentista {
 }
 
 export interface Turno {
-    id: number;
-    nome: string;
-    horario_inicio: string;
-    horario_fim: string;
+	id: number;
+	nome: string;
+	horario_inicio: string;
+	horario_fim: string;
+	ativo?: boolean | null;
 }
 
 export interface Usuario {
@@ -79,7 +80,7 @@ export interface Usuario {
 export interface Fechamento {
     id: number;
     data: string;
-    usuario_id: string;
+	usuario_id: number;
     turno_id: number;
     status: string;
     total_vendas?: number;
@@ -117,6 +118,25 @@ export interface FechamentoFrentista {
     valor_moedas: number;
     diferenca: number;
     observacoes: string | null;
+}
+
+export interface FechamentoFrentistaHistorico {
+	id: number;
+	valor_cartao: number | null;
+	valor_cartao_debito: number | null;
+	valor_cartao_credito: number | null;
+	valor_nota: number | null;
+	valor_pix: number | null;
+	valor_dinheiro: number | null;
+	encerrante?: number | null;
+	diferenca_calculada?: number | null;
+	observacoes?: string | null;
+	Fechamento?: {
+		data?: string;
+		Turno?: {
+			nome?: string;
+		} | null;
+	} | null;
 }
 
 export interface SubmitClosingData {
@@ -295,8 +315,8 @@ export const turnoService = {
         const now = new Date();
         const currentTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
 
-        // Prioriza turnos ativos
-        const activeTurnos = turnos.filter(t => (t as any).ativo !== false);
+		// Prioriza turnos ativos
+		const activeTurnos = turnos.filter(t => t.ativo !== false);
         const searchList = activeTurnos.length > 0 ? activeTurnos : turnos;
 
         console.log(`[TurnoService] Buscando em ${searchList.length} turnos para hora ${currentTime}`);
@@ -336,10 +356,10 @@ export const fechamentoService = {
     /**
      * Busca ou cria um fechamento para a data e turno especificados
      */
-    async getOrCreate(
-        data: string,
-        turnoId: number,
-        usuarioId: number,
+	async getOrCreate(
+		data: string,
+		turnoId: number,
+		usuarioId: number | null,
         totalRecebido: number = 0,
         totalVendas: number = 0,
         postoId?: number
@@ -362,7 +382,7 @@ export const fechamentoService = {
         }
 
         // Se não existe, cria um novo com totais
-        const { data: created, error: createError } = await supabase
+		const { data: created, error: createError } = await supabase
             .from('Fechamento')
             .insert({
                 data,
@@ -557,7 +577,7 @@ export const fechamentoFrentistaService = {
             return [];
         }
 
-        return (data || []).map((item: any) => {
+		return (data || []).map((item: FechamentoFrentistaHistorico) => {
             const totalInformado = (item.valor_cartao || 0) + (item.valor_nota || 0) + (item.valor_pix || 0) + (item.valor_dinheiro || 0);
             // Se valor_cartao for 0 mas tiver debito/credito, usa eles
             const cartaoReal = (item.valor_cartao || 0) || ((item.valor_cartao_debito || 0) + (item.valor_cartao_credito || 0));
@@ -618,20 +638,20 @@ export async function submitMobileClosing(closingData: SubmitClosingData): Promi
                 .limit(1)
                 .single();
 
-            if (adminUser) {
-                usuarioIdParaRegistro = adminUser.id;
-            } else {
-                // Fallback: Qualquer usuário (ex: o primeiro cadastrado)
-                const { data: anyUser } = await supabase
-                    .from('Usuario')
-                    .select('id')
-                    .limit(1)
-                    .single();
-
-                if (anyUser) {
-                    usuarioIdParaRegistro = anyUser.id;
-                }
-            }
+			if (adminUser) {
+				usuarioIdParaRegistro = adminUser.id;
+			} else {
+				// Fallback: Qualquer usuário (ex: o primeiro cadastrado)
+				const { data: fallbackUser } = await supabase
+					.from('Usuario')
+					.select('id')
+					.limit(1)
+					.single();
+				
+				if (fallbackUser) {
+					usuarioIdParaRegistro = fallbackUser.id;
+				}
+			}
         }
 
         // Se ainda assim não tiver ID, é um erro crítico de configuração do banco
@@ -681,10 +701,10 @@ export async function submitMobileClosing(closingData: SubmitClosingData): Promi
         const diferenca = closingData.falta_caixa; // Diferença é a falta
 
         // 5. Buscar ou criar fechamento do dia/turno (agora com totais)
-        const fechamento = await fechamentoService.getOrCreate(
-            closingData.data,
-            closingData.turno_id,
-            usuarioIdParaRegistro as any, // Cast necessário se o tipo for number vs string, mas aqui deve ser string (uuid)
+		const fechamento = await fechamentoService.getOrCreate(
+			closingData.data,
+			closingData.turno_id,
+			usuarioIdParaRegistro,
             totalInformado, // total_recebido
             totalInformado, // total_vendas (mesmo valor por enquanto)
             postoId

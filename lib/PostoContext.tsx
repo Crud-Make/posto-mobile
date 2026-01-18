@@ -80,9 +80,10 @@ export const PostoProvider: React.FC<{ children: ReactNode }> = ({ children }) =
                     setError('Frentista não vinculado a um posto ativo.');
                 }
             }
-        } catch (err: any) {
-            console.error('Erro ao carregar dados do posto:', err);
-            setError(err.message);
+		} catch (err) {
+			console.error('Erro ao carregar dados do posto:', err);
+			const message = err instanceof Error ? err.message : 'Erro ao carregar dados do posto.';
+			setError(message);
         } finally {
             setLoading(false);
         }

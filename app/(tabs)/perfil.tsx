@@ -29,6 +29,7 @@ import {
     Download,
     QrCode
 } from 'lucide-react-native';
+import type { LucideIcon } from 'lucide-react-native';
 
 interface UserStats {
     totalRegistros: number;
@@ -126,8 +127,8 @@ export default function PerfilScreen() {
         iconBg = '#f3f4f6',
         showArrow = true,
         danger = false
-    }: {
-        icon: any;
+	}: {
+		icon: LucideIcon;
         label: string;
         subtitle?: string;
         onPress?: () => void;
