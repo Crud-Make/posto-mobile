@@ -3,7 +3,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useState, useEffect } from 'react';
 import { router } from 'expo-router';
 import { supabase } from '../lib/supabase';
-import { turnoService, frentistaService, type Turno, type Frentista } from '../lib/api';
+import { turnoService, type Turno } from '../services/turno';
+import { frentistaService, type Frentista } from '../services/frentista';
 import { Clock, Check, LogOut } from 'lucide-react-native';
 
 export default function AberturaCaixaScreen() {

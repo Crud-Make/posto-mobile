@@ -22,7 +22,9 @@ import { Picker } from '@react-native-picker/picker'; // Standard pickers often 
 // If not, I'll change it.
 
 import { supabase } from '../../lib/supabase';
-import { produtoService, vendaProdutoService, Produto, VendaProduto, frentistaService } from '../../lib/api';
+import { frentistaService } from '../../services/frentista';
+import { produtoService, type Produto } from '../../services/produto';
+import { vendaProdutoService, type VendaProduto } from '../../services/vendaProduto';
 
 interface Frentista {
     id: number;

@@ -4,7 +4,9 @@ import { View, Platform, Text, ActivityIndicator, TouchableOpacity } from 'react
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
-import { frentistaService, usuarioService, turnoService } from '../../lib/api';
+import { frentistaService } from '../../services/frentista';
+import { usuarioService } from '../../services/usuario';
+import { turnoService } from '../../services/turno';
 
 export default function TabsLayout() {
     const insets = useSafeAreaInsets();

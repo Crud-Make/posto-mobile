@@ -5,7 +5,7 @@ import { supabase } from '../../lib/supabase';
 import { router } from 'expo-router';
 import * as Updates from 'expo-updates';
 import { useUpdateChecker } from '../../lib/useUpdateChecker';
-import { frentistaService, escalaService, type Escala } from '../../lib/api';
+import type { Escala } from '../../lib/types';
 import QRCode from 'react-native-qrcode-svg';
 import {
     User,

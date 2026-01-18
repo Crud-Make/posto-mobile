@@ -2,7 +2,8 @@ import { View, Text, ScrollView, TouchableOpacity, RefreshControl, ActivityIndic
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../../lib/supabase';
-import { frentistaService, fechamentoFrentistaService } from '../../lib/api';
+import { frentistaService } from '../../services/frentista';
+import { fechamentoFrentistaService } from '../../services/fechamento';
 import { usePosto } from '../../lib/PostoContext';
 import {
     Calendar,

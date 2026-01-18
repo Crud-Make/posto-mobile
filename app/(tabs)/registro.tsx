@@ -3,7 +3,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useState, useEffect } from 'react';
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { supabase } from '../../lib/supabase';
-import { submitMobileClosing, turnoService, frentistaService, clienteService, type SubmitClosingData, type Cliente, type Turno, type Frentista } from '../../lib/api';
+import { submitMobileClosing, type SubmitClosingData } from '../../services/fechamento';
+import { turnoService, type Turno } from '../../services/turno';
+import { frentistaService, type Frentista } from '../../services/frentista';
+import { clienteService, type Cliente } from '../../services/cliente';
 import { usePosto } from '../../lib/PostoContext';
 import {
 	CreditCard,
