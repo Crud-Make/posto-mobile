@@ -1,15 +1,31 @@
 import 'react-native-url-polyfill/auto';
 import { createClient } from '@supabase/supabase-js';
+import { Platform } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 
 const ExpoSecureStoreAdapter = {
     getItem: (key: string) => {
+        if (Platform.OS === 'web') {
+            return Promise.resolve(typeof window !== 'undefined' ? window.localStorage.getItem(key) : null);
+        }
         return SecureStore.getItemAsync(key);
     },
     setItem: (key: string, value: string) => {
+        if (Platform.OS === 'web') {
+            if (typeof window !== 'undefined') {
+                window.localStorage.setItem(key, value);
+            }
+            return;
+        }
         SecureStore.setItemAsync(key, value);
     },
     removeItem: (key: string) => {
+        if (Platform.OS === 'web') {
+            if (typeof window !== 'undefined') {
+                window.localStorage.removeItem(key);
+            }
+            return;
+        }
         SecureStore.deleteItemAsync(key);
     },
 };

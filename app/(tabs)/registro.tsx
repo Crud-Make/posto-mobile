@@ -61,6 +61,7 @@ const FORMAS_PAGAMENTO: FormaPagamento[] = [
     { id: 'nota', label: 'Nota/Vale', icon: Receipt, color: '#0891b2', bgColor: '#ecfeff' },
     { id: 'pix', label: 'PIX', icon: Smartphone, color: '#059669', bgColor: '#ecfdf5' },
     { id: 'dinheiro', label: 'Dinheiro', icon: Banknote, color: '#16a34a', bgColor: '#f0fdf4' },
+    { id: 'moeda', label: 'Moedas', icon: Coins, color: '#d97706', bgColor: '#fffbeb' },
 ];
 
 export default function RegistroScreen() {
@@ -688,50 +689,6 @@ export default function RegistroScreen() {
                     <Text className="text-sm text-gray-500 mb-5">Toque nos campos para preencher os valores</Text>
 
                     <View className="flex-row flex-wrap -mx-2">
-                        {/* Cartão Débito */}
-                        <View className="w-1/2 px-2 mb-4">
-                            <View className="bg-white rounded-3xl p-4 border-2 border-blue-50 shadow-sm">
-                                <View className="flex-row items-center gap-2 mb-2">
-                                    <View className="p-1.5 bg-blue-100 rounded-lg">
-                                        <CreditCard size={16} color="#2563eb" />
-                                    </View>
-                                    <Text className="text-[10px] font-black text-blue-600 uppercase">Débito</Text>
-                                </View>
-                                <View className="flex-row items-center border-b border-gray-100 pb-1">
-                                    <Text className="text-gray-400 font-bold mr-1">R$</Text>
-                                    <TextInput
-                                        className="flex-1 text-lg font-black text-gray-800 p-0"
-                                        placeholder="0,00"
-                                        value={registro.valorCartaoDebito}
-                                        onChangeText={(v) => handleChange('valorCartaoDebito', v)}
-                                        keyboardType="decimal-pad"
-                                    />
-                                </View>
-                            </View>
-                        </View>
-
-                        {/* Cartão Crédito */}
-                        <View className="w-1/2 px-2 mb-4">
-                            <View className="bg-white rounded-3xl p-4 border-2 border-indigo-50 shadow-sm">
-                                <View className="flex-row items-center gap-2 mb-2">
-                                    <View className="p-1.5 bg-indigo-100 rounded-lg">
-                                        <CreditCard size={16} color="#4f46e5" />
-                                    </View>
-                                    <Text className="text-[10px] font-black text-indigo-600 uppercase">Crédito</Text>
-                                </View>
-                                <View className="flex-row items-center border-b border-gray-100 pb-1">
-                                    <Text className="text-gray-400 font-bold mr-1">R$</Text>
-                                    <TextInput
-                                        className="flex-1 text-lg font-black text-gray-800 p-0"
-                                        placeholder="0,00"
-                                        value={registro.valorCartaoCredito}
-                                        onChangeText={(v) => handleChange('valorCartaoCredito', v)}
-                                        keyboardType="decimal-pad"
-                                    />
-                                </View>
-                            </View>
-                        </View>
-
                         {/* PIX */}
                         <View className="w-1/2 px-2 mb-4">
                             <View className="bg-white rounded-3xl p-4 border-2 border-teal-50 shadow-sm">
@@ -797,25 +754,75 @@ export default function RegistroScreen() {
                                 </View>
                             </View>
                         </View>
+
+                        {/* Espaço Vazio para manter grid uniforme conforme imagem */}
+                        <View className="w-1/2 px-2 mb-4" />
+
+                        {/* Cartão Débito - Movido para baixo conforme prioridade da imagem */}
+                        <View className="w-1/2 px-2 mb-4">
+                            <View className="bg-white rounded-3xl p-4 border-2 border-blue-50 shadow-sm opacity-80">
+                                <View className="flex-row items-center gap-2 mb-2">
+                                    <View className="p-1.5 bg-blue-100 rounded-lg">
+                                        <CreditCard size={16} color="#2563eb" />
+                                    </View>
+                                    <Text className="text-[10px] font-black text-blue-600 uppercase">Débito</Text>
+                                </View>
+                                <View className="flex-row items-center border-b border-gray-100 pb-1">
+                                    <Text className="text-gray-400 font-bold mr-1">R$</Text>
+                                    <TextInput
+                                        className="flex-1 text-lg font-black text-gray-800 p-0"
+                                        placeholder="0,00"
+                                        value={registro.valorCartaoDebito}
+                                        onChangeText={(v) => handleChange('valorCartaoDebito', v)}
+                                        keyboardType="decimal-pad"
+                                    />
+                                </View>
+                            </View>
+                        </View>
+
+                        {/* Cartão Crédito - Movido para baixo conforme prioridade da imagem */}
+                        <View className="w-1/2 px-2 mb-4">
+                            <View className="bg-white rounded-3xl p-4 border-2 border-indigo-50 shadow-sm opacity-80">
+                                <View className="flex-row items-center gap-2 mb-2">
+                                    <View className="p-1.5 bg-indigo-100 rounded-lg">
+                                        <CreditCard size={16} color="#4f46e5" />
+                                    </View>
+                                    <Text className="text-[10px] font-black text-indigo-600 uppercase">Crédito</Text>
+                                </View>
+                                <View className="flex-row items-center border-b border-gray-100 pb-1">
+                                    <Text className="text-gray-400 font-bold mr-1">R$</Text>
+                                    <TextInput
+                                        className="flex-1 text-lg font-black text-gray-800 p-0"
+                                        placeholder="0,00"
+                                        value={registro.valorCartaoCredito}
+                                        onChangeText={(v) => handleChange('valorCartaoCredito', v)}
+                                        keyboardType="decimal-pad"
+                                    />
+                                </View>
+                            </View>
+                        </View>
                     </View>
 
 
                     {/* Baratão (Full Width styled) */}
                     <View className="mb-6">
-                        <View className="bg-rose-50 rounded-3xl p-5 border-2 border-rose-100 flex-row items-center justify-between">
+                        <View
+                            className="bg-rose-50 rounded-[32px] p-6 border-2 border-rose-100 flex-row items-center justify-between"
+                            style={{ elevation: 2, shadowColor: '#e11d48', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 10 }}
+                        >
                             <View className="flex-row items-center gap-4">
-                                <View className="p-3 bg-rose-600 rounded-2xl shadow-md">
-                                    <CircleDollarSign size={24} color="white" />
+                                <View className="p-4 bg-rose-600 rounded-2xl shadow-lg border-2 border-rose-400/30">
+                                    <CircleDollarSign size={28} color="white" />
                                 </View>
                                 <View>
-                                    <Text className="text-rose-700 font-black text-lg">Baratão</Text>
-                                    <Text className="text-rose-400 text-xs">Voucher promocional</Text>
+                                    <Text className="text-rose-800 font-black text-xl">Baratão</Text>
+                                    <Text className="text-rose-400 text-[10px] font-bold uppercase tracking-widest">Voucher promocional</Text>
                                 </View>
                             </View>
-                            <View className="bg-white px-4 py-2 rounded-2xl border border-rose-200 flex-row items-center">
-                                <Text className="text-rose-300 font-bold mr-1">R$</Text>
+                            <View className="bg-white px-5 py-3 rounded-2xl border-2 border-rose-100 shadow-inner flex-row items-center">
+                                <Text className="text-rose-300 font-black text-xl mr-1">R$</Text>
                                 <TextInput
-                                    className="text-xl font-black text-rose-700 min-w-[80px] text-right"
+                                    className="text-2xl font-black text-rose-700 min-w-[100px] text-right"
                                     placeholder="0,00"
                                     placeholderTextColor="#fecaca"
                                     value={registro.valorBaratao}
