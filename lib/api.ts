@@ -529,6 +529,32 @@ export const fechamentoFrentistaService = {
         return existing !== null;
     },
 
+    async delete(id: number, fechamentoId: number): Promise<void> {
+        // 1. Desvincular NotaFrentista (para manter histórico se necessário, ou deletar se preferir)
+        // Aqui vamos deletar as notas associadas a este fechamento específico se foram enviadas junto
+        const { error: errorNotas } = await supabase
+            .from('NotaFrentista')
+            .delete()
+            .eq('fechamento_frentista_id', id);
+
+        if (errorNotas) {
+            console.error('Erro ao excluir notas vinculadas:', errorNotas);
+        }
+
+        // 2. Deletar o registro de fechamento do frentista
+        const { error } = await supabase
+            .from('FechamentoFrentista')
+            .delete()
+            .eq('id', id);
+
+        if (error) {
+            throw new Error(`Erro ao excluir fechamento frentista: ${error.message}`);
+        }
+
+        // 3. Atualizar totais do fechamento geral
+        await fechamentoService.updateTotals(fechamentoId);
+    },
+
     /**
      * Busca histórico de fechamentos do frentista
      */
@@ -582,6 +608,41 @@ export const fechamentoFrentistaService = {
         });
     },
 };
+
+/**
+ * Função para desfazer um envio (excluir o registro do banco)
+ */
+export async function undoMobileClosing(frentistaId: number, data: string, turnoId: number, postoId: number): Promise<{ success: boolean; message: string }> {
+    try {
+        // 1. Localizar o fechamento geral
+        const { data: fechamento, error: fError } = await supabase
+            .from('Fechamento')
+            .select('id')
+            .eq('data', data)
+            .eq('turno_id', turnoId)
+            .eq('posto_id', postoId)
+            .single();
+
+        if (fError || !fechamento) {
+            return { success: false, message: 'Não foi possível localizar o fechamento para este turno.' };
+        }
+
+        // 2. Localizar o fechamento do frentista
+        const existingId = await fechamentoFrentistaService.getExisting(fechamento.id, frentistaId);
+
+        if (!existingId) {
+            return { success: false, message: 'Nenhum envio encontrado para este frentista neste turno.' };
+        }
+
+        // 3. Deletar
+        await fechamentoFrentistaService.delete(existingId, fechamento.id);
+
+        return { success: true, message: 'Envio removido com sucesso!' };
+    } catch (error) {
+        console.error('Error undoing mobile closing:', error);
+        return { success: false, message: `Erro ao desfazer envio: ${error instanceof Error ? error.message : 'Erro desconhecido'}` };
+    }
+}
 
 /**
  * Função principal para submeter um fechamento de caixa do mobile

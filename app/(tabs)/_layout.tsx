@@ -1,5 +1,6 @@
 import { Tabs, router } from 'expo-router';
 import { ClipboardList, History, User, Home, ShoppingBag, AlertTriangle } from 'lucide-react-native';
+import { useColorScheme } from 'nativewind';
 import { View, Platform, Text, ActivityIndicator, TouchableOpacity } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useState, useEffect } from 'react';
@@ -7,6 +8,7 @@ import { supabase } from '../../lib/supabase';
 import { frentistaService, usuarioService, turnoService } from '../../lib/api';
 
 export default function TabsLayout() {
+    const { colorScheme } = useColorScheme();
     const insets = useSafeAreaInsets();
     const [checking, setChecking] = useState(true);
     const [accountBlocked, setAccountBlocked] = useState(false);
@@ -20,14 +22,14 @@ export default function TabsLayout() {
         try {
             // Em Modo Universal, não bloqueamos se não houver usuário logado
             const { data: { user } } = await supabase.auth.getUser();
-            
+
             if (user) {
                 // Se tiver usuário (admin ou legacy), verifica role
                 const userProfile = await usuarioService.getByEmail(user.email!);
                 if (userProfile?.role === 'ADMIN') {
                     setIsAdmin(true);
                 }
-                
+
                 // Tenta carregar frentista vinculado apenas para status visual
                 // Não bloqueamos mais a navegação baseada nisso
                 const frentista = await frentistaService.getByUserId(user.id);
@@ -35,7 +37,7 @@ export default function TabsLayout() {
                     // Lógica opcional de auto-abertura de caixa mantida apenas se logado
                 }
             }
-            
+
             // Libera o loading imediatamente
             setChecking(false);
 
@@ -93,20 +95,20 @@ export default function TabsLayout() {
     return (
         <Tabs
             screenOptions={{
-                tabBarActiveTintColor: '#b91c1c',
-                tabBarInactiveTintColor: '#9ca3af',
+                tabBarActiveTintColor: colorScheme === 'dark' ? '#f87171' : '#b91c1c', // red-400 : red-700
+                tabBarInactiveTintColor: colorScheme === 'dark' ? '#94a3b8' : '#9ca3af',
                 headerShown: true,
                 headerStyle: {
-                    backgroundColor: '#b91c1c',
+                    backgroundColor: colorScheme === 'dark' ? '#0f172a' : '#b91c1c', // slate-900 or red-700
                 },
                 headerTintColor: '#fff',
                 headerTitleStyle: {
                     fontWeight: 'bold',
                 },
                 tabBarStyle: {
-                    backgroundColor: '#fff',
+                    backgroundColor: colorScheme === 'dark' ? '#0f172a' : '#fff',
                     borderTopWidth: 1,
-                    borderTopColor: '#f3f4f6',
+                    borderTopColor: colorScheme === 'dark' ? '#1e293b' : '#f3f4f6',
                     paddingTop: 10,
                     // Usa o padding dinâmico baseado na Safe Area do dispositivo
                     paddingBottom: bottomPadding,
@@ -126,7 +128,7 @@ export default function TabsLayout() {
                     title: 'Registro de Turno',
                     tabBarLabel: 'Registro',
                     tabBarIcon: ({ color, focused }) => (
-                        <View className={`p-2 rounded-xl ${focused ? 'bg-primary-50' : ''}`}>
+                        <View className={`p-2 rounded-xl ${focused ? 'bg-primary-50 dark:bg-slate-800' : ''}`}>
                             <ClipboardList size={24} color={color} strokeWidth={focused ? 2.5 : 2} />
                         </View>
                     ),
@@ -138,7 +140,7 @@ export default function TabsLayout() {
                     title: 'Venda de Produtos',
                     tabBarLabel: 'Vendas',
                     tabBarIcon: ({ color, focused }) => (
-                        <View className={`p-2 rounded-xl ${focused ? 'bg-primary-50' : ''}`}>
+                        <View className={`p-2 rounded-xl ${focused ? 'bg-primary-50 dark:bg-slate-800' : ''}`}>
                             <ShoppingBag size={24} color={color} strokeWidth={focused ? 2.5 : 2} />
                         </View>
                     ),
@@ -149,7 +151,7 @@ export default function TabsLayout() {
                 options={{
                     title: 'Histórico',
                     tabBarIcon: ({ color, focused }) => (
-                        <View className={`p-2 rounded-xl ${focused ? 'bg-primary-50' : ''}`}>
+                        <View className={`p-2 rounded-xl ${focused ? 'bg-primary-50 dark:bg-slate-800' : ''}`}>
                             <History size={24} color={color} strokeWidth={focused ? 2.5 : 2} />
                         </View>
                     ),
@@ -161,7 +163,7 @@ export default function TabsLayout() {
                     title: 'Meu Perfil',
                     tabBarLabel: 'Perfil',
                     tabBarIcon: ({ color, focused }) => (
-                        <View className={`p-2 rounded-xl ${focused ? 'bg-primary-50' : ''}`}>
+                        <View className={`p-2 rounded-xl ${focused ? 'bg-primary-50 dark:bg-slate-800' : ''}`}>
                             <User size={24} color={color} strokeWidth={focused ? 2.5 : 2} />
                         </View>
                     ),

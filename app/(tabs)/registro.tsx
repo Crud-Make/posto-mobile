@@ -1,11 +1,13 @@
 import { View, Text, TextInput, TouchableOpacity, ScrollView, Alert, ActivityIndicator, KeyboardAvoidingView, Platform, Modal, FlatList } from 'react-native';
+import { useColorScheme } from 'nativewind';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useState, useEffect } from 'react';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { supabase } from '../../lib/supabase';
-import { submitMobileClosing, turnoService, frentistaService, clienteService, type SubmitClosingData, type Cliente, type Turno, type Frentista } from '../../lib/api';
+import { submitMobileClosing, undoMobileClosing, turnoService, frentistaService, clienteService, type SubmitClosingData, type Cliente, type Turno, type Frentista } from '../../lib/api';
 import { usePosto } from '../../lib/PostoContext';
 import {
+    Undo2,
     CreditCard,
     Receipt,
     Smartphone,
@@ -52,6 +54,7 @@ interface RegistroTurno {
     valorDinheiro: string;
     valorMoedas: string;
     valorBaratao: string;
+    valorNotaPrazo: string;
     observacoes: string;
 }
 
@@ -65,6 +68,7 @@ const FORMAS_PAGAMENTO: FormaPagamento[] = [
 ];
 
 export default function RegistroScreen() {
+    const { colorScheme } = useColorScheme();
     const insets = useSafeAreaInsets();
     const { postoAtivo, postoAtivoId } = usePosto();
 
@@ -89,6 +93,7 @@ export default function RegistroScreen() {
         valorDinheiro: '',
         valorMoedas: '',
         valorBaratao: '',
+        valorNotaPrazo: '',
         observacoes: '',
     });
 
@@ -159,6 +164,7 @@ export default function RegistroScreen() {
             valorDinheiro: '',
             valorMoedas: '',
             valorBaratao: '',
+            valorNotaPrazo: '',
             observacoes: '',
         });
         setNotasAdicionadas([]);
@@ -183,49 +189,99 @@ export default function RegistroScreen() {
         setRegistro(prev => ({ ...prev, [field]: formatted }));
     };
 
+    // Função para arredondamento seguro (evita 0.00000001)
+    const roundTwo = (num: number) => Math.round((num + Number.EPSILON) * 100) / 100;
+
     // Cálculos
-    const valorEncerrante = parseValue(registro.valorEncerrante);
-    const totalCartao = parseValue(registro.valorCartaoDebito) + parseValue(registro.valorCartaoCredito);
-    const totalNotas = notasAdicionadas.reduce((acc, current) => acc + current.valor_number, 0);
+    const valorEncerrante = roundTwo(parseValue(registro.valorEncerrante));
+    const totalCartao = roundTwo(parseValue(registro.valorCartaoDebito) + parseValue(registro.valorCartaoCredito));
+    const totalNotas = roundTwo(notasAdicionadas.reduce((acc, current) => acc + current.valor_number, 0) + parseValue(registro.valorNotaPrazo));
     const totalMoedas = parseValue(registro.valorMoedas);
-    const totalInformado = totalCartao + totalNotas + parseValue(registro.valorPix) + parseValue(registro.valorDinheiro) + totalMoedas + parseValue(registro.valorBaratao);
-    const diferencaCaixa = valorEncerrante - totalInformado;
-    const temFalta = diferencaCaixa > 0;
-    const temSobra = diferencaCaixa < 0;
-    const caixaBateu = diferencaCaixa === 0 && valorEncerrante > 0;
+    const totalInformado = roundTwo(totalCartao + totalNotas + parseValue(registro.valorPix) + parseValue(registro.valorDinheiro) + totalMoedas + parseValue(registro.valorBaratao));
+
+    const diferencaCaixa = roundTwo(valorEncerrante - totalInformado);
+
+    // Verificações robustas com margem de erro mínima (0.01)
+    const diferencaAbsoluta = Math.abs(diferencaCaixa);
+    const temFalta = diferencaCaixa > 0.001;
+    const temSobra = diferencaCaixa < -0.001;
+    const caixaBateu = diferencaAbsoluta <= 0.001 && valorEncerrante > 0;
+
+    // Carregar dados (User, Turnos, Clientes)
+    const loadFrentistasQueFecharam = async (turnoIdParam: number, dataParam?: Date) => {
+        if (!postoAtivoId || !turnoIdParam) return;
+
+        try {
+            const dataBase = dataParam || dataFechamento;
+            const dataStr = formatDateForDB(dataBase);
+
+            // Buscar fechamentos do turno atual
+            const { data, error } = await supabase
+                .from('FechamentoFrentista')
+                .select(`
+                frentista_id,
+                fechamento_id,
+                Fechamento!inner(data, turno_id)
+            `)
+                .eq('Fechamento.data', dataStr)
+                .eq('Fechamento.turno_id', turnoIdParam)
+                .eq('posto_id', postoAtivoId);
+
+            if (error) {
+                console.error('Erro ao buscar fechamentos:', error);
+                return;
+            }
+
+            const frentistaIds = data?.map(f => f.frentista_id) || [];
+            setFrentistasQueFecharam(frentistaIds);
+        } catch (error) {
+            console.error('Erro ao carregar frentistas que fecharam:', error);
+        }
+    };
+
+    const handleUndo = async () => {
+        if (!frentistaId || !turnoId) {
+            Alert.alert('Erro', 'Selecione um frentista e um turno primeiro.');
+            return;
+        }
+
+        Alert.alert(
+            '⚠️ Desfazer Envio',
+            'Tem certeza que deseja apagar o seu envio para este turno? Os dados serão removidos permanentemente do sistema.',
+            [
+                { text: 'Cancelar', style: 'cancel' },
+                {
+                    text: 'Confirmar Exclusão',
+                    style: 'destructive',
+                    onPress: async () => {
+                        setSubmitting(true);
+                        try {
+                            const result = await undoMobileClosing(
+                                frentistaId,
+                                formatDateForDB(dataFechamento),
+                                turnoId,
+                                postoAtivoId!
+                            );
+                            if (result.success) {
+                                Alert.alert('✅ Sucesso', result.message);
+                                // Recarregar lista de quem fechou
+                                await loadFrentistasQueFecharam(turnoId);
+                            } else {
+                                Alert.alert('Erro', result.message);
+                            }
+                        } catch (error) {
+                            Alert.alert('Erro', 'Ocorreu um erro ao tentar desfazer o envio.');
+                        } finally {
+                            setSubmitting(false);
+                        }
+                    }
+                }
+            ]
+        );
+    };
 
     // Carregar dados (User, Turnos, Clientes)
     useEffect(() => {
-        async function loadFrentistasQueFecharam(turnoIdParam: number) {
-            if (!postoAtivoId || !turnoIdParam) return;
-
-            try {
-                const hoje = new Date().toISOString().split('T')[0];
-
-                // Buscar fechamentos do turno atual
-                const { data, error } = await supabase
-                    .from('FechamentoFrentista')
-                    .select(`
-                        frentista_id,
-                        fechamento_id,
-                        Fechamento!inner(data, turno_id)
-                    `)
-                    .eq('Fechamento.data', hoje)
-                    .eq('Fechamento.turno_id', turnoIdParam)
-                    .eq('posto_id', postoAtivoId);
-
-                if (error) {
-                    console.error('Erro ao buscar fechamentos:', error);
-                    return;
-                }
-
-                const frentistaIds = data?.map(f => f.frentista_id) || [];
-                setFrentistasQueFecharam(frentistaIds);
-            } catch (error) {
-                console.error('Erro ao carregar frentistas que fecharam:', error);
-            }
-        }
-
         /**
          * loadAllData - Carrega todos os dados necessários para a tela
          * REFATORADO v1.4.0: Modo Universal sem verificação de admin
@@ -251,13 +307,13 @@ export default function RegistroScreen() {
                 setFrentistas(frentistasData);
 
                 // Determinar turno automaticamente (Modo Diário)
-                let turnoIdFinal = null;
+                let turnoIdFinal = turnoId;
 
-                if (turnoAuto) {
-                    // Usa o turno automático baseado na hora atual
+                if (!turnoId && turnoAuto) {
+                    // Usa o turno automático baseado na hora atual se nenhum estiver selecionado
                     setTurnoId(turnoAuto.id);
                     turnoIdFinal = turnoAuto.id;
-                } else if (turnosData.length > 0) {
+                } else if (!turnoId && turnosData.length > 0) {
                     // Fallback: primeiro turno disponível
                     setTurnoId(turnosData[0].id);
                     turnoIdFinal = turnosData[0].id;
@@ -286,7 +342,7 @@ export default function RegistroScreen() {
             .subscribe();
 
         return () => { subscription.unsubscribe(); };
-    }, [postoAtivoId]);
+    }, [postoAtivoId, turnoId, dataFechamento]);
 
     const handleAddNota = () => {
         if (!selectedCliente || !valorNotaTemp) {
@@ -423,6 +479,7 @@ export default function RegistroScreen() {
                                                 valorDinheiro: '',
                                                 valorMoedas: '',
                                                 valorBaratao: '',
+                                                valorNotaPrazo: '',
                                                 observacoes: '',
                                             });
                                             setNotasAdicionadas([]);
@@ -487,7 +544,7 @@ export default function RegistroScreen() {
     return (
         <KeyboardAvoidingView
             behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-            className="flex-1 bg-gray-50"
+            className="flex-1 bg-gray-50 dark:bg-slate-950"
         >
             <ScrollView
                 className="flex-1"
@@ -500,12 +557,12 @@ export default function RegistroScreen() {
                  * Turno é determinado automaticamente (igual ao dashboard web)
                  */}
                 <View
-                    className="mx-4 mt-4 p-5 bg-white rounded-3xl border border-gray-100"
+                    className="mx-4 mt-4 p-5 bg-white dark:bg-slate-900 rounded-3xl border border-gray-100 dark:border-slate-800"
                     style={{ shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.08, shadowRadius: 12, elevation: 4 }}
                 >
                     <View className="flex-row items-center justify-between">
                         <View className="flex-row items-center gap-3">
-                            <View className="w-12 h-12 bg-primary-100 rounded-full items-center justify-center">
+                            <View className="w-12 h-12 bg-primary-100 dark:bg-primary-900/50 rounded-full items-center justify-center">
                                 <User size={24} color="#b91c1c" />
                             </View>
                             <View>
@@ -515,17 +572,17 @@ export default function RegistroScreen() {
                                     className="flex-row items-center gap-1"
                                     activeOpacity={0.7}
                                 >
-                                    <Text className="text-lg font-bold text-gray-800">
+                                    <Text className="text-lg font-bold text-gray-800 dark:text-gray-100">
                                         {frentistaId ? `Olá, ${userName}!` : 'Selecionar Frentista'}
                                     </Text>
-                                    <ChevronDown size={16} color="#4b5563" />
+                                    <ChevronDown size={16} color={colorScheme === 'dark' ? '#9ca3af' : '#4b5563'} />
                                 </TouchableOpacity>
-                                <Text className="text-sm text-gray-500">{postoAtivo?.nome || 'Posto Providência'}</Text>
+                                <Text className="text-sm text-gray-500 dark:text-gray-400">{postoAtivo?.nome || 'Posto Providência'}</Text>
                             </View>
                         </View>
                         {/* Badge de Modo Diário (apenas informativo, não clicável) */}
-                        <View className="bg-gray-100 px-3 py-1.5 rounded-full">
-                            <Text className="text-gray-600 font-bold text-xs">Diário</Text>
+                        <View className="bg-gray-100 dark:bg-slate-800 px-3 py-1.5 rounded-full">
+                            <Text className="text-gray-600 dark:text-gray-300 font-bold text-xs">Diário</Text>
                         </View>
                     </View>
                 </View>
@@ -533,17 +590,17 @@ export default function RegistroScreen() {
 
                 {/* Card de Seleção de Data de Fechamento */}
                 <View
-                    className="mx-4 mt-3 p-4 bg-white rounded-2xl border border-gray-100"
+                    className="mx-4 mt-3 p-4 bg-white dark:bg-slate-900 rounded-2xl border border-gray-100 dark:border-slate-800"
                     style={{ shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 }}
                 >
                     <View className="flex-row items-center justify-between">
                         <View className="flex-row items-center gap-3">
-                            <View className="w-10 h-10 bg-blue-100 rounded-full items-center justify-center">
+                            <View className="w-10 h-10 bg-blue-100 dark:bg-blue-900/30 rounded-full items-center justify-center">
                                 <Calendar size={20} color="#2563eb" />
                             </View>
                             <View>
-                                <Text className="text-xs text-gray-500 font-medium uppercase tracking-wider">Data do Fechamento</Text>
-                                <Text className="text-base font-bold text-gray-800">{formatDateDisplay(dataFechamento)}</Text>
+                                <Text className="text-xs text-gray-500 dark:text-gray-400 font-medium uppercase tracking-wider">Data do Fechamento</Text>
+                                <Text className="text-base font-bold text-gray-800 dark:text-gray-100">{formatDateDisplay(dataFechamento)}</Text>
                             </View>
                         </View>
                         <TouchableOpacity
@@ -605,7 +662,7 @@ export default function RegistroScreen() {
                                     const inicial = item.nome.charAt(0).toUpperCase();
                                     return (
                                         <TouchableOpacity
-                                            className={`mx-4 my-1.5 p-4 rounded-2xl flex-row justify-between items-center ${isSelected ? 'bg-primary-50 border-2 border-primary-200' : 'bg-gray-50'}`}
+                                            className={`mx-4 my-1.5 p-4 rounded-2xl flex-row justify-between items-center ${isSelected ? 'bg-primary-50 dark:bg-primary-900/30 border-2 border-primary-200 dark:border-primary-700' : 'bg-gray-50 dark:bg-slate-800'}`}
                                             onPress={() => {
                                                 // Se trocou de frentista, limpa o formulário
                                                 if (item.id !== frentistaId) {
@@ -625,7 +682,7 @@ export default function RegistroScreen() {
                                                     </Text>
                                                 </View>
                                                 <View>
-                                                    <Text className={`text-base font-bold ${isSelected ? 'text-primary-700' : 'text-gray-800'}`}>
+                                                    <Text className={`text-base font-bold ${isSelected ? 'text-primary-700 dark:text-primary-400' : 'text-gray-800 dark:text-gray-200'}`}>
                                                         {item.nome}
                                                     </Text>
                                                     <Text className="text-gray-400 text-xs">
@@ -652,26 +709,26 @@ export default function RegistroScreen() {
                 </Modal>
 
                 {/* Seção do Encerrante (Destaque Principal) */}
-                <View className="px-4 mt-6">
+                <View className="px-4 mt-4">
                     <View
-                        className="bg-indigo-600 rounded-[32px] p-6 shadow-xl"
-                        style={{ elevation: 8, shadowColor: '#4f46e5', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.3, shadowRadius: 20 }}
+                        className="bg-indigo-600 rounded-[24px] p-4 shadow-xl"
+                        style={{ elevation: 8, shadowColor: '#4f46e5', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.3, shadowRadius: 16 }}
                     >
-                        <View className="flex-row items-center gap-3 mb-4">
-                            <View className="w-10 h-10 bg-white/20 rounded-full items-center justify-center border border-white/30">
-                                <Gauge size={22} color="white" />
+                        <View className="flex-row items-center gap-3 mb-2">
+                            <View className="w-8 h-8 bg-white/20 rounded-full items-center justify-center border border-white/30">
+                                <Gauge size={18} color="white" />
                             </View>
                             <View>
-                                <Text className="text-indigo-100 text-xs font-bold uppercase tracking-widest">Conferência de Vendas</Text>
-                                <Text className="text-white text-lg font-black">Total Vendido (R$)</Text>
+                                <Text className="text-indigo-100 text-[10px] font-bold uppercase tracking-widest">Conferência de Vendas</Text>
+                                <Text className="text-white text-base font-black">Total Vendido (R$)</Text>
                             </View>
                         </View>
 
-                        <View className="bg-white/10 rounded-2xl p-4 border border-white/20">
+                        <View className="bg-white/10 rounded-xl p-2 px-3 border border-white/20">
                             <View className="flex-row items-center">
-                                <Text className="text-indigo-200 text-2xl font-bold mr-2">R$</Text>
+                                <Text className="text-indigo-200 text-xl font-bold mr-2">R$</Text>
                                 <TextInput
-                                    className="flex-1 text-3xl font-black text-white py-1"
+                                    className="flex-1 text-2xl font-black text-white py-0"
                                     placeholder="0,00"
                                     placeholderTextColor="rgba(255,255,255,0.3)"
                                     value={registro.valorEncerrante}
@@ -685,24 +742,25 @@ export default function RegistroScreen() {
 
                 {/* Seção de Valores (Grid 2x2) */}
                 <View className="px-4 mt-8">
-                    <Text className="text-xl font-black text-gray-800 mb-1">💰 Recebimentos</Text>
-                    <Text className="text-sm text-gray-500 mb-5">Toque nos campos para preencher os valores</Text>
+                    <Text className="text-xl font-black text-gray-800 dark:text-white mb-1">💰 Recebimentos</Text>
+                    <Text className="text-sm text-gray-500 dark:text-gray-400 mb-5">Toque nos campos para preencher os valores</Text>
 
                     <View className="flex-row flex-wrap -mx-2">
                         {/* PIX */}
                         <View className="w-1/2 px-2 mb-4">
-                            <View className="bg-white rounded-3xl p-4 border-2 border-teal-50 shadow-sm">
+                            <View className="bg-white dark:bg-slate-900 rounded-3xl p-4 border-2 border-teal-50 dark:border-teal-900/30 shadow-sm">
                                 <View className="flex-row items-center gap-2 mb-2">
-                                    <View className="p-1.5 bg-teal-100 rounded-lg">
+                                    <View className="p-1.5 bg-teal-100 dark:bg-teal-900/50 rounded-lg">
                                         <Smartphone size={16} color="#0d9488" />
                                     </View>
-                                    <Text className="text-[10px] font-black text-teal-600 uppercase">PIX</Text>
+                                    <Text className="text-[10px] font-black text-teal-600 dark:text-teal-400 uppercase">PIX</Text>
                                 </View>
-                                <View className="flex-row items-center border-b border-gray-100 pb-1">
+                                <View className="flex-row items-center border-b border-gray-100 dark:border-slate-800 pb-1">
                                     <Text className="text-gray-400 font-bold mr-1">R$</Text>
                                     <TextInput
-                                        className="flex-1 text-lg font-black text-gray-800 p-0"
+                                        className="flex-1 text-lg font-black text-gray-800 dark:text-white p-0"
                                         placeholder="0,00"
+                                        placeholderTextColor="#9ca3af"
                                         value={registro.valorPix}
                                         onChangeText={(v) => handleChange('valorPix', v)}
                                         keyboardType="decimal-pad"
@@ -713,18 +771,19 @@ export default function RegistroScreen() {
 
                         {/* Dinheiro */}
                         <View className="w-1/2 px-2 mb-4">
-                            <View className="bg-white rounded-3xl p-4 border-2 border-emerald-50 shadow-sm">
+                            <View className="bg-white dark:bg-slate-900 rounded-3xl p-4 border-2 border-emerald-50 dark:border-emerald-900/30 shadow-sm">
                                 <View className="flex-row items-center gap-2 mb-2">
-                                    <View className="p-1.5 bg-emerald-100 rounded-lg">
+                                    <View className="p-1.5 bg-emerald-100 dark:bg-emerald-900/50 rounded-lg">
                                         <Banknote size={16} color="#059669" />
                                     </View>
-                                    <Text className="text-[10px] font-black text-emerald-600 uppercase">Dinheiro</Text>
+                                    <Text className="text-[10px] font-black text-emerald-600 dark:text-emerald-400 uppercase">Dinheiro</Text>
                                 </View>
-                                <View className="flex-row items-center border-b border-gray-100 pb-1">
+                                <View className="flex-row items-center border-b border-gray-100 dark:border-slate-800 pb-1">
                                     <Text className="text-gray-400 font-bold mr-1">R$</Text>
                                     <TextInput
-                                        className="flex-1 text-lg font-black text-gray-800 p-0"
+                                        className="flex-1 text-lg font-black text-gray-800 dark:text-white p-0"
                                         placeholder="0,00"
+                                        placeholderTextColor="#9ca3af"
                                         value={registro.valorDinheiro}
                                         onChangeText={(v) => handleChange('valorDinheiro', v)}
                                         keyboardType="decimal-pad"
@@ -735,18 +794,19 @@ export default function RegistroScreen() {
 
                         {/* Moedas */}
                         <View className="w-1/2 px-2 mb-4">
-                            <View className="bg-white rounded-3xl p-4 border-2 border-amber-50 shadow-sm">
+                            <View className="bg-white dark:bg-slate-900 rounded-3xl p-4 border-2 border-amber-50 dark:border-amber-900/30 shadow-sm">
                                 <View className="flex-row items-center gap-2 mb-2">
-                                    <View className="p-1.5 bg-amber-100 rounded-lg">
+                                    <View className="p-1.5 bg-amber-100 dark:bg-amber-900/50 rounded-lg">
                                         <Coins size={16} color="#d97706" />
                                     </View>
-                                    <Text className="text-[10px] font-black text-amber-600 uppercase">Moedas</Text>
+                                    <Text className="text-[10px] font-black text-amber-600 dark:text-amber-400 uppercase">Moedas</Text>
                                 </View>
-                                <View className="flex-row items-center border-b border-gray-100 pb-1">
+                                <View className="flex-row items-center border-b border-gray-100 dark:border-slate-800 pb-1">
                                     <Text className="text-gray-400 font-bold mr-1">R$</Text>
                                     <TextInput
-                                        className="flex-1 text-lg font-black text-gray-800 p-0"
+                                        className="flex-1 text-lg font-black text-gray-800 dark:text-white p-0"
                                         placeholder="0,00"
+                                        placeholderTextColor="#9ca3af"
                                         value={registro.valorMoedas}
                                         onChangeText={(v) => handleChange('valorMoedas', v)}
                                         keyboardType="decimal-pad"
@@ -755,23 +815,67 @@ export default function RegistroScreen() {
                             </View>
                         </View>
 
-                        {/* Espaço Vazio para manter grid uniforme conforme imagem */}
-                        <View className="w-1/2 px-2 mb-4" />
+                        {/* Baratão */}
+                        <View className="w-1/2 px-2 mb-4">
+                            <View className="bg-white dark:bg-slate-900 rounded-3xl p-4 border-2 border-rose-50 dark:border-rose-900/30 shadow-sm">
+                                <View className="flex-row items-center gap-2 mb-2">
+                                    <View className="p-1.5 bg-rose-100 dark:bg-rose-900/50 rounded-lg">
+                                        <CircleDollarSign size={16} color="#e11d48" />
+                                    </View>
+                                    <Text className="text-[10px] font-black text-rose-600 dark:text-rose-400 uppercase">Baratão</Text>
+                                </View>
+                                <View className="flex-row items-center border-b border-gray-100 dark:border-slate-800 pb-1">
+                                    <Text className="text-gray-400 font-bold mr-1">R$</Text>
+                                    <TextInput
+                                        className="flex-1 text-lg font-black text-gray-800 dark:text-white p-0"
+                                        placeholder="0,00"
+                                        placeholderTextColor="#9ca3af"
+                                        value={registro.valorBaratao}
+                                        onChangeText={(v) => handleChange('valorBaratao', v)}
+                                        keyboardType="decimal-pad"
+                                    />
+                                </View>
+                            </View>
+                        </View>
+
+                        {/* Nota a Prazo */}
+                        <View className="w-1/2 px-2 mb-4">
+                            <View className="bg-white dark:bg-slate-900 rounded-3xl p-4 border-2 border-cyan-50 dark:border-cyan-900/30 shadow-sm">
+                                <View className="flex-row items-center gap-2 mb-2">
+                                    <View className="p-1.5 bg-cyan-100 dark:bg-cyan-900/50 rounded-lg">
+                                        <Receipt size={16} color="#0891b2" />
+                                    </View>
+                                    <Text className="text-[10px] font-black text-cyan-600 dark:text-cyan-400 uppercase">Nota a Prazo</Text>
+                                </View>
+                                <View className="flex-row items-center border-b border-gray-100 dark:border-slate-800 pb-1">
+                                    <Text className="text-gray-400 font-bold mr-1">R$</Text>
+                                    <TextInput
+                                        className="flex-1 text-lg font-black text-gray-800 dark:text-white p-0"
+                                        placeholder="0,00"
+                                        placeholderTextColor="#9ca3af"
+                                        value={registro.valorNotaPrazo}
+                                        onChangeText={(v) => handleChange('valorNotaPrazo', v)}
+                                        keyboardType="decimal-pad"
+                                    />
+                                </View>
+                            </View>
+                        </View>
 
                         {/* Cartão Débito - Movido para baixo conforme prioridade da imagem */}
                         <View className="w-1/2 px-2 mb-4">
-                            <View className="bg-white rounded-3xl p-4 border-2 border-blue-50 shadow-sm opacity-80">
+                            <View className="bg-white dark:bg-slate-900 rounded-3xl p-4 border-2 border-blue-50 dark:border-blue-900/30 shadow-sm opacity-80">
                                 <View className="flex-row items-center gap-2 mb-2">
-                                    <View className="p-1.5 bg-blue-100 rounded-lg">
+                                    <View className="p-1.5 bg-blue-100 dark:bg-blue-900/50 rounded-lg">
                                         <CreditCard size={16} color="#2563eb" />
                                     </View>
-                                    <Text className="text-[10px] font-black text-blue-600 uppercase">Débito</Text>
+                                    <Text className="text-[10px] font-black text-blue-600 dark:text-blue-400 uppercase">Débito</Text>
                                 </View>
-                                <View className="flex-row items-center border-b border-gray-100 pb-1">
+                                <View className="flex-row items-center border-b border-gray-100 dark:border-slate-800 pb-1">
                                     <Text className="text-gray-400 font-bold mr-1">R$</Text>
                                     <TextInput
-                                        className="flex-1 text-lg font-black text-gray-800 p-0"
+                                        className="flex-1 text-lg font-black text-gray-800 dark:text-white p-0"
                                         placeholder="0,00"
+                                        placeholderTextColor="#9ca3af"
                                         value={registro.valorCartaoDebito}
                                         onChangeText={(v) => handleChange('valorCartaoDebito', v)}
                                         keyboardType="decimal-pad"
@@ -782,18 +886,19 @@ export default function RegistroScreen() {
 
                         {/* Cartão Crédito - Movido para baixo conforme prioridade da imagem */}
                         <View className="w-1/2 px-2 mb-4">
-                            <View className="bg-white rounded-3xl p-4 border-2 border-indigo-50 shadow-sm opacity-80">
+                            <View className="bg-white dark:bg-slate-900 rounded-3xl p-4 border-2 border-indigo-50 dark:border-indigo-900/30 shadow-sm opacity-80">
                                 <View className="flex-row items-center gap-2 mb-2">
-                                    <View className="p-1.5 bg-indigo-100 rounded-lg">
+                                    <View className="p-1.5 bg-indigo-100 dark:bg-indigo-900/50 rounded-lg">
                                         <CreditCard size={16} color="#4f46e5" />
                                     </View>
-                                    <Text className="text-[10px] font-black text-indigo-600 uppercase">Crédito</Text>
+                                    <Text className="text-[10px] font-black text-indigo-600 dark:text-indigo-400 uppercase">Crédito</Text>
                                 </View>
-                                <View className="flex-row items-center border-b border-gray-100 pb-1">
+                                <View className="flex-row items-center border-b border-gray-100 dark:border-slate-800 pb-1">
                                     <Text className="text-gray-400 font-bold mr-1">R$</Text>
                                     <TextInput
-                                        className="flex-1 text-lg font-black text-gray-800 p-0"
+                                        className="flex-1 text-lg font-black text-gray-800 dark:text-white p-0"
                                         placeholder="0,00"
+                                        placeholderTextColor="#9ca3af"
                                         value={registro.valorCartaoCredito}
                                         onChangeText={(v) => handleChange('valorCartaoCredito', v)}
                                         keyboardType="decimal-pad"
@@ -804,45 +909,21 @@ export default function RegistroScreen() {
                     </View>
 
 
-                    {/* Baratão (Full Width styled) */}
-                    <View className="mb-6">
-                        <View
-                            className="bg-rose-50 rounded-[32px] p-6 border-2 border-rose-100 flex-row items-center justify-between"
-                            style={{ elevation: 2, shadowColor: '#e11d48', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 10 }}
-                        >
-                            <View className="flex-row items-center gap-4">
-                                <View className="p-4 bg-rose-600 rounded-2xl shadow-lg border-2 border-rose-400/30">
-                                    <CircleDollarSign size={28} color="white" />
-                                </View>
-                                <View>
-                                    <Text className="text-rose-800 font-black text-xl">Baratão</Text>
-                                    <Text className="text-rose-400 text-[10px] font-bold uppercase tracking-widest">Voucher promocional</Text>
-                                </View>
-                            </View>
-                            <View className="bg-white px-5 py-3 rounded-2xl border-2 border-rose-100 shadow-inner flex-row items-center">
-                                <Text className="text-rose-300 font-black text-xl mr-1">R$</Text>
-                                <TextInput
-                                    className="text-2xl font-black text-rose-700 min-w-[100px] text-right"
-                                    placeholder="0,00"
-                                    placeholderTextColor="#fecaca"
-                                    value={registro.valorBaratao}
-                                    onChangeText={(v) => handleChange('valorBaratao', v)}
-                                    keyboardType="decimal-pad"
-                                />
-                            </View>
-                        </View>
-                    </View>
+
 
                     {/* Seção de Notas/Vales */}
                     <View className="mb-4">
-                        <View className="flex-row items-center justify-between mb-3 px-1">
+                        <View className="flex-row items-center justify-between mb-2 px-1">
                             <View>
-                                <Text className="text-lg font-black text-gray-800">📑 Notas / Vales</Text>
-                                <Text className="text-xs text-gray-400">Vendas faturadas a prazo</Text>
+                                <Text className="text-xl font-black text-gray-800 dark:text-white">📑 Notas / Vales</Text>
+                                <Text className="text-sm text-gray-500 dark:text-gray-400">Vendas faturadas a prazo</Text>
                             </View>
                             <TouchableOpacity
                                 className="bg-cyan-600 px-4 py-2.5 rounded-2xl flex-row items-center gap-2 shadow-sm"
-                                onPress={() => setModalNotaVisible(true)}
+                                onPress={() => {
+                                    setModalNotaVisible(true);
+                                    setBuscaCliente('');
+                                }}
                             >
                                 <Plus size={16} color="white" strokeWidth={3} />
                                 <Text className="text-white font-black text-sm uppercase">Adicionar</Text>
@@ -850,31 +931,31 @@ export default function RegistroScreen() {
                         </View>
 
                         {notasAdicionadas.length === 0 ? (
-                            <View className="bg-gray-100 rounded-[32px] p-10 border-2 border-gray-200 border-dashed items-center justify-center">
-                                <View className="w-16 h-16 bg-gray-200 rounded-full items-center justify-center mb-4">
+                            <View className="bg-gray-100 dark:bg-slate-800 rounded-[32px] p-10 border-2 border-gray-200 dark:border-slate-700 border-dashed items-center justify-center">
+                                <View className="w-16 h-16 bg-gray-200 dark:bg-slate-700 rounded-full items-center justify-center mb-4">
                                     <Receipt size={32} color="#9ca3af" />
                                 </View>
-                                <Text className="text-gray-400 text-sm font-bold text-center">Nenhuma nota pendente</Text>
-                                <Text className="text-gray-300 text-[10px] uppercase mt-1 tracking-tighter">Toque em adicionar para registrar</Text>
+                                <Text className="text-gray-400 dark:text-gray-500 text-sm font-bold text-center">Nenhuma nota pendente</Text>
+                                <Text className="text-gray-300 dark:text-slate-600 text-[10px] uppercase mt-1 tracking-tighter">Toque em adicionar para registrar</Text>
                             </View>
                         ) : (
                             <View
-                                className="bg-white rounded-[32px] border-2 border-cyan-100 overflow-hidden shadow-sm"
+                                className="bg-white dark:bg-slate-900 rounded-[32px] border-2 border-cyan-100 dark:border-cyan-900/30 overflow-hidden shadow-sm"
                                 style={{ elevation: 3 }}
                             >
                                 {notasAdicionadas.map((item, index) => (
-                                    <View key={index} className={`flex-row items-center justify-between p-5 ${index !== notasAdicionadas.length - 1 ? 'border-b border-gray-50' : ''}`}>
+                                    <View key={index} className={`flex-row items-center justify-between p-5 ${index !== notasAdicionadas.length - 1 ? 'border-b border-gray-50 dark:border-gray-800' : ''}`}>
                                         <View className="flex-1 pr-2">
-                                            <Text className="text-gray-800 font-black text-base" numberOfLines={1}>{item.cliente_nome}</Text>
+                                            <Text className="text-gray-800 dark:text-white font-black text-base" numberOfLines={1}>{item.cliente_nome}</Text>
                                             <Text className="text-gray-400 text-[10px] uppercase font-bold tracking-widest">Venda faturada</Text>
                                         </View>
                                         <View className="flex-row items-center gap-4">
-                                            <View className="bg-cyan-50 px-3 py-1.5 rounded-xl border border-cyan-100">
-                                                <Text className="font-black text-cyan-700 text-base">{formatCurrency(item.valor_number)}</Text>
+                                            <View className="bg-cyan-50 dark:bg-cyan-900/30 px-3 py-1.5 rounded-xl border border-cyan-100 dark:border-cyan-800">
+                                                <Text className="font-black text-cyan-700 dark:text-cyan-300 text-base">{formatCurrency(item.valor_number)}</Text>
                                             </View>
                                             <TouchableOpacity
                                                 onPress={() => handleRemoveNota(index)}
-                                                className="bg-red-50 p-2 rounded-xl border border-red-100"
+                                                className="bg-red-50 dark:bg-red-900/30 p-2 rounded-xl border border-red-100 dark:border-red-900/50"
                                             >
                                                 <Trash2 size={18} color="#ef4444" />
                                             </TouchableOpacity>
@@ -895,104 +976,124 @@ export default function RegistroScreen() {
                 {/* Card de Resumo */}
                 <View className="px-4 mt-6">
                     <View
-                        className="bg-white rounded-3xl border border-gray-100 overflow-hidden"
+                        className="bg-white dark:bg-slate-900 rounded-3xl border border-gray-100 dark:border-slate-800 overflow-hidden"
                         style={{ shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.08, shadowRadius: 12, elevation: 4 }}
                     >
-                        <View className="bg-gray-50 px-5 py-4 border-b border-gray-100">
+                        <View className="bg-gray-50 dark:bg-slate-800/50 px-5 py-4 border-b border-gray-100 dark:border-slate-800">
                             <View className="flex-row items-center gap-2">
                                 <Calculator size={20} color="#6b7280" />
-                                <Text className="text-base font-bold text-gray-700">Resumo do Turno</Text>
+                                <Text className="text-base font-bold text-gray-700 dark:text-gray-300">Resumo do Turno</Text>
                             </View>
                         </View>
 
                         <View className="p-5">
                             {/* Encerrante */}
                             <View className="flex-row justify-between items-center mb-3">
-                                <Text className="text-gray-500">Encerrante</Text>
-                                <Text className="text-lg font-bold text-purple-700">{formatCurrency(valorEncerrante)}</Text>
+                                <Text className="text-gray-500 dark:text-gray-400">Encerrante</Text>
+                                <Text className="text-lg font-bold text-purple-700 dark:text-purple-400">{formatCurrency(valorEncerrante)}</Text>
                             </View>
 
                             {/* Total Pagamentos */}
                             <View className="flex-row justify-between items-center mb-2">
-                                <Text className="text-gray-500">Total Pagamentos</Text>
-                                <Text className="text-lg font-bold text-gray-800">{formatCurrency(totalInformado)}</Text>
+                                <Text className="text-gray-500 dark:text-gray-400">Total Pagamentos</Text>
+                                <Text className="text-lg font-bold text-gray-800 dark:text-white">{formatCurrency(totalInformado)}</Text>
                             </View>
 
                             {/* Detalhamento de Pagamentos */}
-                            <View className="pl-2 border-l-2 border-gray-100 mb-3">
+                            <View className="pl-2 border-l-2 border-gray-100 dark:border-slate-700 mb-3">
                                 {parseValue(registro.valorCartaoDebito) > 0 && (
                                     <View className="flex-row justify-between items-center mb-1">
                                         <Text className="text-gray-400 text-xs">Cartão Débito</Text>
-                                        <Text className="text-xs font-medium text-gray-600">{formatCurrency(parseValue(registro.valorCartaoDebito))}</Text>
+                                        <Text className="text-xs font-medium text-gray-600 dark:text-gray-300">{formatCurrency(parseValue(registro.valorCartaoDebito))}</Text>
                                     </View>
                                 )}
                                 {parseValue(registro.valorCartaoCredito) > 0 && (
                                     <View className="flex-row justify-between items-center mb-1">
                                         <Text className="text-gray-400 text-xs">Cartão Crédito</Text>
-                                        <Text className="text-xs font-medium text-gray-600">{formatCurrency(parseValue(registro.valorCartaoCredito))}</Text>
+                                        <Text className="text-xs font-medium text-gray-600 dark:text-gray-300">{formatCurrency(parseValue(registro.valorCartaoCredito))}</Text>
                                     </View>
                                 )}
                                 {totalNotas > 0 && (
                                     <View className="flex-row justify-between items-center mb-1">
                                         <Text className="text-gray-400 text-xs">Notas/Vales ({notasAdicionadas.length})</Text>
-                                        <Text className="text-xs font-medium text-gray-600">{formatCurrency(totalNotas)}</Text>
+                                        <Text className="text-xs font-medium text-gray-600 dark:text-gray-300">{formatCurrency(totalNotas)}</Text>
                                     </View>
                                 )}
                                 {parseValue(registro.valorPix) > 0 && (
                                     <View className="flex-row justify-between items-center mb-1">
                                         <Text className="text-gray-400 text-xs">PIX</Text>
-                                        <Text className="text-xs font-medium text-gray-600">{formatCurrency(parseValue(registro.valorPix))}</Text>
+                                        <Text className="text-xs font-medium text-gray-600 dark:text-gray-300">{formatCurrency(parseValue(registro.valorPix))}</Text>
                                     </View>
                                 )}
                                 {parseValue(registro.valorDinheiro) > 0 && (
                                     <View className="flex-row justify-between items-center mb-1">
                                         <Text className="text-gray-400 text-xs">Dinheiro</Text>
-                                        <Text className="text-xs font-medium text-gray-600">{formatCurrency(parseValue(registro.valorDinheiro))}</Text>
+                                        <Text className="text-xs font-medium text-gray-600 dark:text-gray-300">{formatCurrency(parseValue(registro.valorDinheiro))}</Text>
                                     </View>
                                 )}
                                 {parseValue(registro.valorMoedas) > 0 && (
                                     <View className="flex-row justify-between items-center mb-1">
                                         <Text className="text-gray-400 text-xs">Moedas</Text>
-                                        <Text className="text-xs font-medium text-gray-600">{formatCurrency(parseValue(registro.valorMoedas))}</Text>
+                                        <Text className="text-xs font-medium text-gray-600 dark:text-gray-300">{formatCurrency(parseValue(registro.valorMoedas))}</Text>
                                     </View>
                                 )}
                                 {parseValue(registro.valorBaratao) > 0 && (
                                     <View className="flex-row justify-between items-center">
                                         <Text className="text-gray-400 text-xs">Baratão</Text>
-                                        <Text className="text-xs font-medium text-gray-600">{formatCurrency(parseValue(registro.valorBaratao))}</Text>
+                                        <Text className="text-xs font-medium text-gray-600 dark:text-gray-300">{formatCurrency(parseValue(registro.valorBaratao))}</Text>
                                     </View>
                                 )}
+                                <View className="flex-row justify-between items-center mt-2 pt-2 border-t border-gray-100 dark:border-slate-700">
+                                    <Text className="text-gray-500 dark:text-gray-400 font-bold">Diferença</Text>
+                                    <Text className={`text-lg font-black ${caixaBateu ? 'text-emerald-600 dark:text-emerald-400' : temFalta ? 'text-red-600 dark:text-red-400' : 'text-blue-600 dark:text-blue-400'}`}>
+                                        {formatCurrency(diferencaCaixa)}
+                                    </Text>
+                                </View>
                             </View>
 
+                            {/* Botão Desfazer (Aparece se já enviou) */}
+                            {frentistaId && frentistasQueFecharam.includes(frentistaId) && (
+                                <View className="px-5 pb-5">
+                                    <TouchableOpacity
+                                        onPress={handleUndo}
+                                        disabled={submitting}
+                                        className="bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-800/50 py-3 rounded-2xl flex-row justify-center items-center"
+                                    >
+                                        <Undo2 size={18} color="#ef4444" style={{ marginRight: 8 }} />
+                                        <Text className="text-red-600 dark:text-red-400 font-bold">Desfazer este envio</Text>
+                                    </TouchableOpacity>
+                                </View>
+                            )}
+
                             {/* Status da Diferença */}
-                            <View className="border-t border-dashed border-gray-200 pt-3 mt-2">
+                            <View className="border-t border-dashed border-gray-200 dark:border-slate-700 pt-3 mt-2">
                                 {caixaBateu && (
-                                    <View className="flex-row justify-between items-center py-2 px-3 bg-green-50 rounded-lg -mx-1">
+                                    <View className="flex-row justify-between items-center py-2 px-3 bg-green-50 dark:bg-green-900/20 rounded-lg -mx-1">
                                         <View className="flex-row items-center gap-2">
                                             <Check size={18} color="#16a34a" />
-                                            <Text className="text-green-700 font-bold">Caixa Bateu!</Text>
+                                            <Text className="text-green-700 dark:text-green-400 font-bold">Caixa Bateu!</Text>
                                         </View>
-                                        <Text className="text-lg font-black text-green-600">✓</Text>
+                                        <Text className="text-lg font-black text-green-600 dark:text-green-400">✓</Text>
                                     </View>
                                 )}
 
                                 {temFalta && (
-                                    <View className="flex-row justify-between items-center py-2 px-3 bg-red-50 rounded-lg -mx-1">
+                                    <View className="flex-row justify-between items-center py-2 px-3 bg-red-50 dark:bg-red-900/20 rounded-lg -mx-1">
                                         <View className="flex-row items-center gap-2">
                                             <AlertTriangle size={18} color="#dc2626" />
-                                            <Text className="text-red-600 font-bold">Falta de Caixa</Text>
+                                            <Text className="text-red-600 dark:text-red-400 font-bold">Falta de Caixa</Text>
                                         </View>
-                                        <Text className="text-lg font-black text-red-600">- {formatCurrency(diferencaCaixa)}</Text>
+                                        <Text className="text-lg font-black text-red-600 dark:text-red-400">- {formatCurrency(diferencaCaixa)}</Text>
                                     </View>
                                 )}
 
                                 {temSobra && (
-                                    <View className="flex-row justify-between items-center py-2 px-3 bg-yellow-50 rounded-lg -mx-1">
+                                    <View className="flex-row justify-between items-center py-2 px-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg -mx-1">
                                         <View className="flex-row items-center gap-2">
                                             <AlertTriangle size={18} color="#ca8a04" />
-                                            <Text className="text-yellow-700 font-bold">Sobra de Caixa</Text>
+                                            <Text className="text-yellow-700 dark:text-yellow-400 font-bold">Sobra de Caixa</Text>
                                         </View>
-                                        <Text className="text-lg font-black text-yellow-600">+ {formatCurrency(Math.abs(diferencaCaixa))}</Text>
+                                        <Text className="text-lg font-black text-yellow-600 dark:text-yellow-400">+ {formatCurrency(Math.abs(diferencaCaixa))}</Text>
                                     </View>
                                 )}
 
@@ -1009,7 +1110,7 @@ export default function RegistroScreen() {
                 {/* Botão Enviar */}
                 <View className="px-4 mt-8" style={{ marginBottom: insets.bottom + 40 }}>
                     <TouchableOpacity
-                        className={`w-full py-5 rounded-2xl flex-row items-center justify-center gap-3 ${submitting || totalInformado === 0 ? 'bg-gray-300' : 'bg-primary-700'}`}
+                        className={`w-full py-5 rounded-2xl flex-row items-center justify-center gap-3 ${submitting || totalInformado === 0 ? 'bg-gray-300 dark:bg-slate-700' : 'bg-primary-700 dark:bg-primary-600'}`}
                         style={totalInformado > 0 ? { shadowColor: '#b91c1c', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.35, shadowRadius: 12, elevation: 10 } : {}}
                         onPress={handleSubmit}
                         disabled={submitting || totalInformado === 0}
@@ -1039,24 +1140,38 @@ export default function RegistroScreen() {
                         className="absolute inset-0"
                         onPress={() => setModalNotaVisible(false)}
                     />
-                    <View className="bg-white rounded-t-[40px] p-6 shadow-2xl">
+                    <View className="bg-white dark:bg-slate-900 rounded-t-[40px] p-6 shadow-2xl">
                         <View className="flex-row justify-between items-center mb-6">
-                            <Text className="text-2xl font-black text-gray-800">Nova Nota / Vale</Text>
+                            <Text className="text-2xl font-black text-gray-800 dark:text-white">Nova Nota / Vale</Text>
                             <TouchableOpacity
                                 onPress={() => setModalNotaVisible(false)}
-                                className="bg-gray-100 p-2 rounded-full"
+                                className="bg-gray-100 dark:bg-slate-800 p-2 rounded-full"
                             >
                                 <X size={20} color="#6b7280" />
                             </TouchableOpacity>
                         </View>
 
-                        <Text className="text-sm font-bold text-gray-500 mb-2 uppercase tracking-widest">Cliente</Text>
+                        <Text className="text-sm font-bold text-gray-500 dark:text-gray-400 mb-2 uppercase tracking-widest">Valor da Nota</Text>
+                        <View className="flex-row items-center bg-gray-50 dark:bg-slate-800 rounded-3xl p-4 border-2 border-cyan-100 dark:border-cyan-900/30 mb-6">
+                            <Text className="text-2xl font-bold text-cyan-600 dark:text-cyan-400 mr-2">R$</Text>
+                            <TextInput
+                                className="flex-1 text-3xl font-black text-gray-800 dark:text-white"
+                                placeholder="0,00"
+                                placeholderTextColor="#9ca3af"
+                                value={valorNotaTemp}
+                                onChangeText={(text) => setValorNotaTemp(formatCurrencyInput(text))}
+                                keyboardType="numeric"
+                                autoFocus={true}
+                            />
+                        </View>
+
+                        <Text className="text-sm font-bold text-gray-500 dark:text-gray-400 mb-2 uppercase tracking-widest">Cliente</Text>
 
                         {/* Campo de Busca de Cliente */}
-                        <View className="flex-row items-center bg-gray-50 rounded-2xl border border-gray-200 px-4 py-3 mb-4">
+                        <View className="flex-row items-center bg-gray-50 dark:bg-slate-800 rounded-2xl border border-gray-200 dark:border-slate-700 px-4 py-3 mb-4">
                             <Search size={20} color="#9ca3af" style={{ marginRight: 8 }} />
                             <TextInput
-                                className="flex-1 text-base text-gray-800"
+                                className="flex-1 text-base text-gray-800 dark:text-white"
                                 placeholder="Buscar cliente..."
                                 placeholderTextColor="#9ca3af"
                                 value={buscaCliente}
@@ -1072,11 +1187,11 @@ export default function RegistroScreen() {
 
                         <View className="mb-6 h-64">
                             {clientes.length === 0 ? (
-                                <View className="p-4 bg-gray-50 rounded-2xl items-center border border-gray-100">
+                                <View className="p-4 bg-gray-50 dark:bg-slate-800 rounded-2xl items-center border border-gray-100 dark:border-slate-700">
                                     <Text className="text-gray-400 italic">Nenhum cliente cadastrado no sistema</Text>
                                 </View>
                             ) : buscaCliente.length === 0 ? (
-                                <View className="flex-1 items-center justify-center bg-gray-50 rounded-2xl border-2 border-dashed border-gray-200 p-4">
+                                <View className="flex-1 items-center justify-center bg-gray-50 dark:bg-slate-800 rounded-2xl border-2 border-dashed border-gray-200 dark:border-slate-700 p-4">
                                     <Search size={32} color="#9ca3af" style={{ opacity: 0.5, marginBottom: 8 }} />
                                     <Text className="text-gray-400 text-center font-medium">Digite o nome para buscar...</Text>
                                 </View>
@@ -1085,17 +1200,17 @@ export default function RegistroScreen() {
                                     nestedScrollEnabled={true}
                                     keyboardShouldPersistTaps="handled"
                                     showsVerticalScrollIndicator={true}
-                                    className="border border-gray-100 rounded-2xl bg-gray-50/50"
+                                    className="border border-gray-100 dark:border-slate-700 rounded-2xl bg-gray-50/50 dark:bg-slate-800/50"
                                 >
                                     <View className="p-2">
-                                        {clientes.filter(c => c.nome.toLowerCase().includes(buscaCliente.toLowerCase())).length === 0 ? (
+                                        {clientes.filter((c: Cliente) => c.nome.toLowerCase().includes(buscaCliente.toLowerCase())).length === 0 ? (
                                             <View className="p-4 items-center">
                                                 <Text className="text-gray-400">Nenhum cliente encontrado</Text>
                                             </View>
                                         ) : (
                                             clientes
-                                                .filter(c => c.nome.toLowerCase().includes(buscaCliente.toLowerCase()))
-                                                .map((cliente) => (
+                                                .filter((c: Cliente) => c.nome.toLowerCase().includes(buscaCliente.toLowerCase()))
+                                                .map((cliente: Cliente) => (
                                                     <TouchableOpacity
                                                         key={cliente.id}
                                                         onPress={() => {
@@ -1103,11 +1218,11 @@ export default function RegistroScreen() {
                                                             setBuscaCliente(''); // Limpa busca pra UX ficar top (ou não, dependendo, mas aqui fecha o modal depois né?)
                                                             // Ah, não, aqui só seleciona. Então talvez manter o texto ajude a confirmar. Mas vou limpar pra ficar clean.
                                                         }}
-                                                        className={`px-4 py-3 rounded-xl border-2 mb-2 w-full flex-row justify-between items-center ${cliente.bloqueado ? 'bg-gray-200 border-gray-300 opacity-70' : selectedCliente?.id === cliente.id ? 'bg-cyan-600 border-cyan-600' : 'bg-white border-gray-200'}`}
+                                                        className={`px-4 py-3 rounded-xl border-2 mb-2 w-full flex-row justify-between items-center ${cliente.bloqueado ? 'bg-gray-200 dark:bg-slate-700 border-gray-300 dark:border-slate-600 opacity-70' : selectedCliente?.id === cliente.id ? 'bg-cyan-600 border-cyan-600' : 'bg-white dark:bg-slate-700 border-gray-200 dark:border-slate-600'}`}
                                                     >
                                                         <View className="flex-1">
                                                             <View className="flex-row items-center gap-2">
-                                                                <Text className={`font-bold text-base ${cliente.bloqueado ? 'text-gray-500' : selectedCliente?.id === cliente.id ? 'text-white' : 'text-gray-800'}`}>
+                                                                <Text className={`font-bold text-base ${cliente.bloqueado ? 'text-gray-500' : selectedCliente?.id === cliente.id ? 'text-white' : 'text-gray-800 dark:text-gray-200'}`}>
                                                                     {cliente.nome}
                                                                 </Text>
                                                                 {cliente.bloqueado && (
@@ -1135,21 +1250,11 @@ export default function RegistroScreen() {
                             )}
                         </View>
 
-                        <Text className="text-sm font-bold text-gray-500 mb-2 uppercase tracking-widest">Valor da Nota</Text>
-                        <View className="flex-row items-center bg-gray-50 rounded-3xl p-4 border-2 border-cyan-100 mb-8">
-                            <Text className="text-2xl font-bold text-cyan-600 mr-2">R$</Text>
-                            <TextInput
-                                className="flex-1 text-3xl font-black text-gray-800"
-                                placeholder="0,00"
-                                value={valorNotaTemp}
-                                onChangeText={(text) => setValorNotaTemp(formatCurrencyInput(text))}
-                                keyboardType="numeric"
-                            />
-                        </View>
+
 
                         <TouchableOpacity
                             onPress={handleAddNota}
-                            className={`py-4 rounded-3xl flex-row justify-center items-center shadow-lg ${!selectedCliente || parseValue(valorNotaTemp) === 0 ? 'bg-gray-300' : 'bg-cyan-600 shadow-cyan-200'}`}
+                            className={`py-4 rounded-3xl flex-row justify-center items-center shadow-lg ${!selectedCliente || parseValue(valorNotaTemp) === 0 ? 'bg-gray-300 dark:bg-slate-700' : 'bg-cyan-600 dark:bg-cyan-700 shadow-cyan-200 dark:shadow-none'}`}
                             disabled={!selectedCliente || parseValue(valorNotaTemp) === 0}
                         >
                             <Plus size={24} color="white" style={{ marginRight: 8 }} />
@@ -1161,15 +1266,17 @@ export default function RegistroScreen() {
             </Modal>
 
             {/* DatePicker para Android */}
-            {showDatePicker && Platform.OS === 'android' && (
-                <DateTimePicker
-                    value={dataFechamento}
-                    mode="date"
-                    display="default"
-                    onChange={handleDateChange}
-                    maximumDate={new Date()} // Não permite selecionar datas futuras
-                />
-            )}
+            {
+                showDatePicker && Platform.OS === 'android' && (
+                    <DateTimePicker
+                        value={dataFechamento}
+                        mode="date"
+                        display="default"
+                        onChange={handleDateChange}
+                        maximumDate={new Date()} // Não permite selecionar datas futuras
+                    />
+                )
+            }
 
             {/* Modal com DatePicker para iOS */}
             <Modal
@@ -1183,12 +1290,12 @@ export default function RegistroScreen() {
                         className="absolute inset-0"
                         onPress={() => setModalDataVisible(false)}
                     />
-                    <View className="bg-white rounded-t-[32px] p-6 shadow-2xl">
+                    <View className="bg-white dark:bg-slate-900 rounded-t-[32px] p-6 shadow-2xl">
                         <View className="flex-row justify-between items-center mb-4">
-                            <Text className="text-2xl font-black text-gray-800">Selecionar Data</Text>
+                            <Text className="text-2xl font-black text-gray-800 dark:text-white">Selecionar Data</Text>
                             <TouchableOpacity
                                 onPress={() => setModalDataVisible(false)}
-                                className="bg-gray-100 p-2 rounded-full"
+                                className="bg-gray-100 dark:bg-slate-800 p-2 rounded-full"
                             >
                                 <X size={20} color="#6b7280" />
                             </TouchableOpacity>
@@ -1200,7 +1307,7 @@ export default function RegistroScreen() {
                             display="spinner"
                             onChange={handleDateChange}
                             maximumDate={new Date()}
-                            textColor="#000"
+                            textColor={colorScheme === 'dark' ? '#fff' : '#000'}
                         />
 
                         <TouchableOpacity
