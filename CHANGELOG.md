@@ -7,9 +7,23 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
 
 ---
 
-## [1.6.0] - 2026-01-06
+## [1.6.0] - 2026-02-03
 
 ### ✨ Adicionado
+- **OTA (Over-The-Air Updates)**: Configurado canal `production` e `runtimeVersion` 1.6.0 para atualizações automáticas.
+- **Build Local**: Implementado fluxo de build local (`eas build --local`) com suporte a `ANDROID_HOME` configurado.
+
+### 🔄 Alterado
+- **Sincronização de Dependências**: Atualizadas dependências do Expo SDK 54.0.0 (`expo`, `expo-updates`, `expo-router`, etc.) para garantir compatibilidade nativa.
+- **Gerenciador de Pacotes**: Removido `bun.lock` em favor do `package-lock.json` para maior consistência no EAS Build.
+
+### 🐛 Correções
+- **Build Gradle**: Corrigidas falhas de compilação relacionadas ao caminho do Android SDK e versões de plugins incompatíveis.
+- **Sincronização de Dados**: Validada a integridade dos envios (Barbra) no banco de dados.
+
+---
+
+## [1.6.0-beta] - 2026-01-06
 - **Seleção de Data de Fechamento**: Agora é possível selecionar a data do fechamento ao invés de usar sempre a data atual.
   - Card visual com exibição da data selecionada
   - Botão "Alterar" para abrir o seletor de data
